@@ -1,0 +1,23 @@
+#!/bin/bash
+# telemt-deploy — быстрый вызов меню управления
+set -euo pipefail
+
+DEPLOY_ROOT="@DEPLOY_ROOT@"
+CONF="/etc/telemt-deploy.conf"
+
+if [ -f "$CONF" ]; then
+  # shellcheck disable=SC1090
+  source "$CONF"
+fi
+
+if [ ! -f "$DEPLOY_ROOT/install.sh" ]; then
+  echo "telemt-deploy не найден: $DEPLOY_ROOT" >&2
+  echo "Проверьте установку или файл $CONF" >&2
+  exit 1
+fi
+
+if [ "$(id -u)" -ne 0 ]; then
+  exec sudo -E bash "$DEPLOY_ROOT/install.sh" "$@"
+fi
+
+exec bash "$DEPLOY_ROOT/install.sh" "$@"

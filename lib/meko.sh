@@ -1,0 +1,132 @@
+#!/bin/bash
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+
+MEKO_SH_VERSION="1.1"
+MEKO_SYNFIX_VERSION="3.0.1"
+MEKO_VERSION_FILE="/opt/mtpr-simple/version"
+MEKO_APPLY_SCRIPT="/opt/mtpr-simple/apply-mtpr-synfix.sh"
+
+meko_bundled_version() {
+  echo "$MEKO_SYNFIX_VERSION"
+}
+
+meko_installed_version() {
+  if [ -f "$MEKO_VERSION_FILE" ]; then
+    tr -d '[:space:]' < "$MEKO_VERSION_FILE"
+    return 0
+  fi
+  echo "н/д"
+}
+
+meko_is_inline_installed() {
+  [ -f "$MEKO_APPLY_SCRIPT" ]
+}
+
+meko_is_full_installed() {
+  [ -f /opt/mtpr-simple/main.sh ]
+}
+
+meko_install_mode() {
+  if meko_is_full_installed; then
+    echo "full"
+  elif meko_is_inline_installed; then
+    echo "inline"
+  else
+    echo "none"
+  fi
+}
+
+meko_update_available() {
+  local installed bundled
+  [ "$(meko_install_mode)" = "inline" ] || return 1
+  bundled="$(meko_bundled_version)"
+  installed="$(meko_installed_version)"
+  [ "$installed" != "н/д" ] || return 1
+  version_gt "$bundled" "$installed"
+}
+
+meko_write_version() {
+  local version="${1:-$(meko_bundled_version)}"
+  mkdir -p "$(dirname "$MEKO_VERSION_FILE")"
+  echo "$version" > "$MEKO_VERSION_FILE"
+}
+
+meko_install_inline() {
+  mkdir -p /opt/mtpr-simple
+  echo "443" > /opt/mtpr-simple/port
+  cp "$DEPLOY_ROOT/templates/apply-mtpr-synfix.sh" /opt/mtpr-simple/apply-mtpr-synfix.sh
+  chmod +x /opt/mtpr-simple/apply-mtpr-synfix.sh
+  cp "$DEPLOY_ROOT/templates/mtpr-synfix.service" /etc/systemd/system/mtpr-synfix.service
+  meko_write_version "$(meko_bundled_version)"
+  modprobe xt_u32 2>/dev/null || log_warn "xt_u32 не загружен — MEKO может не работать"
+  modprobe xt_hashlimit 2>/dev/null || true
+  systemctl daemon-reload
+  systemctl enable mtpr-synfix
+  systemctl restart mtpr-synfix
+  log_ok "MEKO SYN FIX (inline) v$(meko_bundled_version) установлен"
+}
+
+meko_upgrade_inline() {
+  log_info "Обновление MEKO SYN FIX до v$(meko_bundled_version)..."
+  meko_install_inline
+  log_ok "MEKO SYN FIX обновлён до v$(meko_installed_version)"
+}
+
+meko_install_full() {
+  curl -fsSL https://raw.githubusercontent.com/Mekotofeuka/MTPROTO_FIX_By_MEKO/main/install_main.sh \
+    | bash </dev/null
+  echo "/etc/telemt/telemt.toml" > /opt/mtpr-simple/config_path
+  bash /opt/mtpr-simple/main.sh -auto_install 443 </dev/null || true
+  log_ok "MEKO Launcher (mekopr) установлен"
+}
+
+meko_install() {
+  if [ "${MEKO_FULL:-0}" -eq 1 ]; then
+    meko_install_full
+  else
+    if meko_is_inline_installed && meko_update_available; then
+      log_info "Найдена устаревшая версия MEKO SYN FIX v$(meko_installed_version), обновляем..."
+      meko_upgrade_inline
+    else
+      meko_install_inline
+    fi
+  fi
+}
+
+meko_show_version_info() {
+  local bundled installed status mode
+  bundled="$(meko_bundled_version)"
+  installed="$(meko_installed_version)"
+  mode="$(meko_install_mode)"
+
+  case "$mode" in
+    inline) mode="inline SYN FIX" ;;
+    full) mode="MEKO Launcher (full)" ;;
+    *) mode="не установлен" ;;
+  esac
+
+  if systemctl is-active --quiet mtpr-synfix 2>/dev/null; then
+    status="active"
+  else
+    status="inactive"
+  fi
+
+  echo "  тип: ${mode}"
+  echo "  установлена: v${installed}"
+  echo "  в комплекте: v${bundled}"
+  echo "  статус: ${status}"
+  if meko_update_available; then
+    echo -e "  ${YELLOW}доступно обновление до v${bundled}${NC}"
+  fi
+}
+
+meko_upgrade_if_needed() {
+  if meko_update_available; then
+    if is_auto_mode; then
+      meko_upgrade_inline
+    else
+      log_warn "Доступно обновление MEKO SYN FIX: v$(meko_installed_version) -> v$(meko_bundled_version)"
+      log_info "Обновите через меню (п. 7) или: sudo bash install.sh --meko-upgrade"
+    fi
+  fi
+}

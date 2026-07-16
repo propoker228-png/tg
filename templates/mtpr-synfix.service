@@ -1,0 +1,13 @@
+[Unit]
+Description=MTProto SYN FIX rules for Telemt (MEKO v3)
+After=network.target ufw.service
+Wants=ufw.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/mtpr-simple/apply-mtpr-synfix.sh
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

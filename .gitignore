@@ -1,0 +1,13 @@
+# Локальные секреты и состояние сервера (не коммитить)
+telemt-secret.txt
+*.state
+telemt-deploy.state
+
+# Временные файлы тестов
+.tmp-smoke-meko/
+*.tar.gz
+
+# Редакторы / ОС
+.DS_Store
+*.swp
+*~
