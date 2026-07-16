@@ -6,9 +6,11 @@
 
 ```bash
 git clone git@github.com:propoker228-png/tg.git
-cd telemt-deploy
+cd tg
 sudo bash install.sh
 ```
+
+Полная инструкция по развёртыванию: [DEPLOY.md](DEPLOY.md)
 
 Скрипт откроет **интерактивное меню** (установка, статистика, мониторинг, сервисы и др.) или выполнит установку по флагам.
 
