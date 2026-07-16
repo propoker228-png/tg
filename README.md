@@ -5,7 +5,7 @@
 ## Быстрый старт
 
 ```bash
-git clone https://github.com/OWNER/telemt-deploy.git
+git clone git@github.com:propoker228-png/tg.git
 cd telemt-deploy
 sudo bash install.sh
 ```
