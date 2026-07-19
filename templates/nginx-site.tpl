@@ -21,7 +21,7 @@ server {
 
 server {
     listen 127.0.0.1:8444 ssl;
-    server_name ${DOMAIN};
+    server_name ${TLS_DOMAIN};
     server_tokens off;
     ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;

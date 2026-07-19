@@ -31,7 +31,7 @@ run_doctor_quick() {
   fi
 
   local code
-  code=$(wait_mask_site_http "$domain" 200 20 || true)
+  code=$(wait_mask_site_http "$(telemt_mask_domain)" 200 20 || true)
   if [ "$code" = "200" ]; then
     log_ok "mask site отвечает HTTP 200"
   else

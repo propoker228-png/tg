@@ -5,9 +5,13 @@ INSTALL_FLOW_SH_VERSION="1.1"
 
 run_install_flow() {
   [ -n "${DOMAIN:-}" ] || die "Домен обязателен"
-  export DOMAIN
+  TLS_DOMAIN="${TLS_DOMAIN:-$DOMAIN}"
+  export DOMAIN TLS_DOMAIN
 
   log_info "Старт установки для $(hl_domain "$DOMAIN")"
+  if [ "$TLS_DOMAIN" != "$DOMAIN" ]; then
+    log_info "Маскировка TLS (SNI): $(hl_domain "$TLS_DOMAIN")"
+  fi
 
   prereq_install
   nginx_install_temp

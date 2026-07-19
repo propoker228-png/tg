@@ -98,6 +98,18 @@ fetch_proxy_link() {
     | python3 -c "import sys,json; print(json.load(sys.stdin)['data'][0]['links']['tls'][0])" 2>/dev/null
 }
 
+telemt_mask_domain() {
+  if [ -n "${TLS_DOMAIN:-}" ]; then
+    printf '%s' "$TLS_DOMAIN"
+    return 0
+  fi
+  if [ -f /etc/telemt/telemt.toml ]; then
+    awk -F'"' '/^tls_domain = / { print $2; exit }' /etc/telemt/telemt.toml 2>/dev/null
+    return 0
+  fi
+  printf '%s' "${DOMAIN:-}"
+}
+
 wait_proxy_link() {
   local attempt link max="${1:-20}"
   for attempt in $(seq 1 "$max"); do
@@ -110,8 +122,14 @@ wait_proxy_link() {
 
 render_template() {
   local tpl="$1" dest="$2"
-  export DOMAIN SECRET AD_TAG_LINE
-  envsubst '${DOMAIN} ${SECRET} ${AD_TAG_LINE}' < "$tpl" > "$dest"
+  TLS_DOMAIN="${TLS_DOMAIN:-${DOMAIN:-}}"
+  if [ "${TLS_DOMAIN:-}" != "${DOMAIN:-}" ]; then
+    TLS_EMULATION=true
+  else
+    TLS_EMULATION=false
+  fi
+  export DOMAIN TLS_DOMAIN TLS_EMULATION SECRET AD_TAG_LINE
+  envsubst '${DOMAIN} ${TLS_DOMAIN} ${TLS_EMULATION} ${SECRET} ${AD_TAG_LINE}' < "$tpl" > "$dest"
 }
 
 version_gt() {
@@ -283,8 +301,10 @@ prompt_choice_12() {
 }
 
 save_state() {
+  TLS_DOMAIN="${TLS_DOMAIN:-$DOMAIN}"
   cat > "$STATE_FILE" <<EOF
 DOMAIN=$DOMAIN
+TLS_DOMAIN=$TLS_DOMAIN
 SECRET=$SECRET
 AD_TAG=${AD_TAG:-}
 TELEMT_VERSION=${TELEMT_VERSION:-}

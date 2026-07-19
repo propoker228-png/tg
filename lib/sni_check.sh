@@ -4,11 +4,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 SNI_CHECK_SH_VERSION="1.0"
 
 telemt_tls_domain() {
-  if [ -f /etc/telemt/telemt.toml ]; then
-    awk -F'"' '/^tls_domain = / { print $2; exit }' /etc/telemt/telemt.toml 2>/dev/null
-    return 0
-  fi
-  printf '%s' "${DOMAIN:-}"
+  telemt_mask_domain
 }
 
 check_sni_local() {

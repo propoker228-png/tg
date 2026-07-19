@@ -6,6 +6,7 @@
 # Без флагов — интерактивное меню управления (п. 1–11).
 #
 #   --domain DOMAIN         Домен (A-запись → этот сервер)
+#   --tls-domain DOMAIN     Домен маскировки TLS/SNI (по умолчанию = --domain)
 #   --ad-tag HEX32          ad_tag из @MTProxybot (32 hex)
 #   --telemt-version VER    Версия telemt (предвыбор в меню версий)
 #   --meko-version VER      Версия MEKO (предвыбор в меню версий)
@@ -42,7 +43,7 @@ remote_bootstrap() {
   fi
 }
 
-DOMAIN=""; AD_TAG=""; TELEMT_VERSION=""; MEKO_VERSION=""; YES=0; MEKO_FULL=0; UNINSTALL=0
+DOMAIN=""; TLS_DOMAIN=""; AD_TAG=""; TELEMT_VERSION=""; MEKO_VERSION=""; YES=0; MEKO_FULL=0; UNINSTALL=0
 FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; CHECK_RKN=0; DOCTOR=0
 SUBCOMMAND=""
 
@@ -63,6 +64,7 @@ require_arg_value() {
 while [ $# -gt 0 ]; do
   case "$1" in
     --domain) DOMAIN=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
+    --tls-domain) TLS_DOMAIN=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --ad-tag) AD_TAG=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --telemt-version) TELEMT_VERSION=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --meko-version) MEKO_VERSION=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
@@ -87,13 +89,14 @@ while [ $# -gt 0 ]; do
 done
 
 export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE CHECK_RKN DOCTOR
+[ -n "$TLS_DOMAIN" ] && export TLS_DOMAIN
 [ -n "$AD_TAG" ] && export AD_TAG
 
 remote_bootstrap
 
 # shellcheck source=lib/common.sh
 source "$DEPLOY_ROOT/lib/common.sh"
-for mod in prereq dns nginx ssl ssl_renew telemt meko firewall dialog ui_highlight version_picker rkn_check sni_check link backup doctor verify handoff uninstall env stats monitor install_flow cli_tools menu; do
+for mod in prereq dns nginx ssl ssl_renew telemt meko firewall dialog ui_highlight mask_picker version_picker rkn_check sni_check link backup doctor verify handoff uninstall env stats monitor install_flow cli_tools menu; do
   # shellcheck source=/dev/null
   source "$DEPLOY_ROOT/lib/${mod}.sh"
 done
@@ -106,6 +109,10 @@ validate_cli_inputs() {
   if [ -n "$DOMAIN" ]; then
     DOMAIN="$(require_valid_domain_name "$DOMAIN")"
     export DOMAIN
+  fi
+  if [ -n "$TLS_DOMAIN" ]; then
+    TLS_DOMAIN="$(require_valid_domain_name "$TLS_DOMAIN")"
+    export TLS_DOMAIN
   fi
   [ -z "$AD_TAG" ] || require_valid_ad_tag "$AD_TAG"
   [ -z "$TELEMT_VERSION" ] || require_valid_telemt_version "$TELEMT_VERSION"
@@ -125,7 +132,7 @@ trap 'on_err $LINENO ${BASH_SOURCE[0]##*/}' ERR
 
 has_action_flags() {
   [ "$UNINSTALL" -eq 1 ] || [ "$STATUS" -eq 1 ] || [ "$CHECK_RKN" -eq 1 ] || [ "$FRESH" -eq 1 ] || \
-    [ "$KEEP_EXISTING" -eq 1 ] || [ "$MEKO_UPGRADE" -eq 1 ] || [ -n "$DOMAIN" ] || \
+    [ "$KEEP_EXISTING" -eq 1 ] || [ "$MEKO_UPGRADE" -eq 1 ] || [ -n "$DOMAIN" ] || [ -n "$TLS_DOMAIN" ] || \
     [ -n "$AD_TAG" ] || [ -n "$TELEMT_VERSION" ] || [ -n "$MEKO_VERSION" ] || [ "$MEKO_FULL" -eq 1 ]
 }
 
@@ -169,6 +176,10 @@ require_lib_bundle() {
   fi
   if [ "${VERSION_PICKER_SH_VERSION:-}" != "1.0" ]; then
     echo "[X] Отсутствует lib/version_picker.sh (v1.0) — скопируйте lib/version_picker.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${MASK_PICKER_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/mask_picker.sh (v1.0) — скопируйте lib/mask_picker.sh на сервер" >&2
     missing=1
   fi
   if [ "${RKN_CHECK_SH_VERSION:-}" != "1.0" ]; then

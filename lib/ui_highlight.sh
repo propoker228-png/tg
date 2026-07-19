@@ -41,7 +41,12 @@ print_install_summary() {
   echo -e "${BOLD}══════════════════════════════════════${NC}"
   echo -e "${BOLD}  Параметры установки${NC}"
   echo -e "${BOLD}══════════════════════════════════════${NC}"
-  echo -e "  Домен:      $(hl_domain "$DOMAIN")"
+  echo -e "  Домен:      $(hl_domain "$DOMAIN")  ${GRAY}(A-запись / SSL)${NC}"
+  if [ "${TLS_DOMAIN:-$DOMAIN}" != "${DOMAIN:-}" ]; then
+    echo -e "  Маскировка: $(hl_domain "${TLS_DOMAIN}")  ${GRAY}(TLS SNI)${NC}"
+  else
+    echo -e "  Маскировка: $(hl_domain "$DOMAIN")  ${GRAY}(как домен)${NC}"
+  fi
   echo -e "  SSL:        $(hl_ssl)"
   echo -e "  telemt:     $(hl_telemt_version "${TELEMT_VERSION}" "${TELEMT_VERSION_HINT:-}")"
   echo -e "  MEKO:       $(hl_meko "$meko_mode" "${MEKO_VERSION:-$(meko_bundled_version)}")"

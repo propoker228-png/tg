@@ -190,6 +190,7 @@ prepare_install_options() {
   echo ""
   log_info "Подготовка параметров установки"
   echo -e "  Домен: $(hl_domain "$DOMAIN")"
+  prepare_install_mask_domain
   pick_telemt_version
   pick_meko_type
   pick_meko_version

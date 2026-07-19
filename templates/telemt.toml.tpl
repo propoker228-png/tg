@@ -23,11 +23,11 @@ listen = "127.0.0.1:9091"
 whitelist = ["127.0.0.1/32"]
 
 [censorship]
-tls_domain = "${DOMAIN}"
+tls_domain = "${TLS_DOMAIN}"
 mask = true
 mask_host = "127.0.0.1"
 mask_port = 8444
-tls_emulation = false
+tls_emulation = ${TLS_EMULATION}
 unknown_sni_action = "mask"
 fake_cert_len = 2048
 tls_front_dir = "/opt/telemt/tlsfront"

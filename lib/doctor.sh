@@ -148,7 +148,7 @@ run_doctor_full() {
     doctor_record "Порт 443" fail "telemt не слушает 443"
   fi
 
-  code=$(wait_mask_site_http "$domain" 200 10 || echo "000")
+  code=$(wait_mask_site_http "$(telemt_mask_domain)" 200 10 || echo "000")
   if [ "$code" = "200" ]; then
     doctor_record "Mask-site" pass "HTTP 200"
   else

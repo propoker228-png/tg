@@ -43,7 +43,7 @@ env_load_settings() {
   if [ -f "$STATE_FILE" ]; then
     # shellcheck disable=SC1090
     source "$STATE_FILE"
-    export DOMAIN SECRET AD_TAG
+    export DOMAIN SECRET AD_TAG TLS_DOMAIN
   fi
 
   if [ -z "${SECRET:-}" ] && [ -f "$SECRET_FILE" ]; then
@@ -58,11 +58,18 @@ env_load_settings() {
 
   if [ -z "${DOMAIN:-}" ] && [ -f /etc/telemt/telemt.toml ]; then
     DOMAIN=$(
-      awk -F'"' '/^public_host = / { print $2; exit }
-                 /^tls_domain = / { print $2; exit }' /etc/telemt/telemt.toml
+      awk -F'"' '/^public_host = / { print $2; exit }' /etc/telemt/telemt.toml
     )
     export DOMAIN
   fi
+
+  if [ -z "${TLS_DOMAIN:-}" ] && [ -f /etc/telemt/telemt.toml ]; then
+    TLS_DOMAIN=$(
+      awk -F'"' '/^tls_domain = / { print $2; exit }' /etc/telemt/telemt.toml
+    )
+    export TLS_DOMAIN
+  fi
+  TLS_DOMAIN="${TLS_DOMAIN:-$DOMAIN}"
 
   [ -n "${AD_TAG:-}" ] && export AD_TAG
 }
