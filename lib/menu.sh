@@ -103,7 +103,7 @@ menu_proxy_settings() {
 
 menu_ssl() {
   require_installed || return 0
-  local cert=""
+  local cert="" days=0
 
   echo "=== SSL ==="
   if [ -n "${DOMAIN:-}" ]; then
@@ -112,11 +112,18 @@ menu_ssl() {
     if [ -f "$cert" ]; then
       echo "  сертификат: есть"
       openssl x509 -in "$cert" -noout -dates 2>/dev/null || true
+      days=$(ssl_cert_days_left "$DOMAIN")
+      [ "$days" -ge 0 ] && echo "  осталось дней: ${days}"
     else
       echo "  сертификат: отсутствует"
       if confirm_action "Выпустить сертификат через certbot?"; then
         ssl_obtain_cert "$DOMAIN"
       fi
+    fi
+    if ssl_renew_hook_installed; then
+      echo "  автообновление: включено"
+    else
+      echo "  автообновление: не настроено"
     fi
     echo ""
     if confirm_action "Запустить certbot renew?"; then
@@ -183,10 +190,25 @@ menu_firewall() {
 }
 
 menu_verify() {
+  local c=""
   require_installed || return 0
   [ -n "${DOMAIN:-}" ] || { log_warn "Домен не задан"; pause_key_menu; return 0; }
-  verify_install "$DOMAIN"
-  pause_key_menu
+
+  while true; do
+    clear
+    echo "=== Проверки ==="
+    echo "  1) Быстрая (verify)"
+    echo "  2) Полная (doctor)"
+    echo "  0) Назад"
+    prompt_line c "Выбор" ""
+    case "$c" in
+      1) run_doctor_quick "$DOMAIN"; pause_key_menu ;;
+      2) run_doctor_full "$DOMAIN"; pause_key_menu ;;
+      0) break ;;
+      *) log_warn "Неверный выбор"; sleep 1 ;;
+    esac
+    [ "$c" = "1" ] || [ "$c" = "2" ] && break
+  done
 }
 
 menu_upgrade_telemt() {

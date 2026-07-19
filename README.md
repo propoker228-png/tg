@@ -32,7 +32,7 @@ sudo bash install.sh
 | 6 | SSL |
 | 7 | MEKO SYN FIX |
 | 8 | Firewall |
-| 9 | Проверки |
+| 9 | Проверки (быстрая / doctor) |
 | 10 | Обновить telemt |
 | 11 | Удалить стек |
 | 0 | Выход |
@@ -55,6 +55,7 @@ sudo bash install.sh
 | `--keep` | Оставить найденную установку как есть |
 | `--status` | Статус и число подключённых (без меню) |
 | `--check-rkn` | Проверить IP сервера в реестре РКН (без меню) |
+| `--doctor` | Полная диагностика (как `tg doctor`) |
 | `--meko-upgrade` | Обновить MEKO SYN FIX до версии из комплекта |
 | `--uninstall` | Удалить установленный стек |
 | `-h`, `--help` | Справка |
@@ -91,6 +92,17 @@ sudo bash install.sh --domain example.com --meko-full --yes
 
 ```bash
 sudo bash install.sh --uninstall
+```
+
+## Команды tg
+
+```bash
+sudo tg doctor              # полная диагностика
+sudo tg doctor --quick      # быстрая проверка
+sudo tg link                # ссылка прокси
+sudo tg link --qr           # ссылка + QR (нужен qrencode)
+sudo tg backup              # полный бэкап (сертификаты Let's Encrypt)
+sudo tg restore /root/telemt-backup-....tar.gz
 ```
 
 ## Что устанавливается

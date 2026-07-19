@@ -16,7 +16,14 @@
 #   --status                Показать статус и число подключённых (как в MEKO)
 #   --meko-upgrade          Обновить MEKO SYN FIX до версии из комплекта
 #   --check-rkn             Проверить IP сервера в реестре РКН (без меню)
+#   --doctor                Полная диагностика (tg doctor)
 #   --uninstall             Удалить установленный стек
+#
+# Подкоманды (через tg или install.sh):
+#   doctor [--quick]        Диагностика (полная или быстрая)
+#   link [--qr]             Ссылка прокси (+ QR)
+#   backup                  Создать бэкап
+#   restore FILE [--force]  Восстановить бэкап
 #   -h, --help              Показать справку
 #
 set -euo pipefail
@@ -36,7 +43,13 @@ remote_bootstrap() {
 }
 
 DOMAIN=""; AD_TAG=""; TELEMT_VERSION=""; MEKO_VERSION=""; YES=0; MEKO_FULL=0; UNINSTALL=0
-FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; CHECK_RKN=0
+FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; CHECK_RKN=0; DOCTOR=0
+SUBCOMMAND=""
+
+if [ $# -gt 0 ] && [[ "$1" != --* ]]; then
+  SUBCOMMAND="$1"
+  shift
+fi
 
 require_arg_value() {
   local flag="$1" value="${2:-}"
@@ -60,9 +73,10 @@ while [ $# -gt 0 ]; do
     --status) STATUS=1; shift ;;
     --meko-upgrade) MEKO_UPGRADE=1; shift ;;
     --check-rkn) CHECK_RKN=1; shift ;;
+    --doctor) DOCTOR=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
     -h|--help)
-      sed -n '2,20p' "$0"
+      sed -n '2,26p' "$0"
       exit 0
       ;;
     *)
@@ -72,14 +86,14 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE CHECK_RKN
+export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE CHECK_RKN DOCTOR
 [ -n "$AD_TAG" ] && export AD_TAG
 
 remote_bootstrap
 
 # shellcheck source=lib/common.sh
 source "$DEPLOY_ROOT/lib/common.sh"
-for mod in prereq dns nginx ssl telemt meko firewall dialog ui_highlight version_picker rkn_check verify handoff uninstall env stats monitor install_flow cli_tools menu; do
+for mod in prereq dns nginx ssl ssl_renew telemt meko firewall dialog ui_highlight version_picker rkn_check sni_check link backup doctor verify handoff uninstall env stats monitor install_flow cli_tools menu; do
   # shellcheck source=/dev/null
   source "$DEPLOY_ROOT/lib/${mod}.sh"
 done
@@ -100,7 +114,7 @@ validate_cli_inputs() {
 
 validate_cli_inputs
 
-INSTALLER_VERSION="2.6"
+INSTALLER_VERSION="2.7"
 
 on_err() {
   echo "[X] Сбой установки (строка ${1:-?} в ${2:-install.sh})" >&2
@@ -161,6 +175,30 @@ require_lib_bundle() {
     echo "[X] Отсутствует lib/rkn_check.sh (v1.0) — скопируйте lib/rkn_check.sh на сервер" >&2
     missing=1
   fi
+  if [ "${DOCTOR_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/doctor.sh (v1.0) — скопируйте lib/doctor.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${LINK_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/link.sh (v1.0) — скопируйте lib/link.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${BACKUP_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/backup.sh (v1.0) — скопируйте lib/backup.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${SSL_RENEW_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/ssl_renew.sh (v1.0) — скопируйте lib/ssl_renew.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${SNI_CHECK_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/sni_check.sh (v1.0) — скопируйте lib/sni_check.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${VERIFY_SH_VERSION:-}" != "1.1" ]; then
+    echo "[X] Устаревший lib/verify.sh (нужен v1.1) — скопируйте lib/verify.sh на сервер" >&2
+    missing=1
+  fi
   if [ "${CLI_TOOLS_SH_VERSION:-}" != "1.0" ]; then
     echo "[X] Отсутствует lib/cli_tools.sh (v1.0) — скопируйте lib/cli_tools.sh на сервер" >&2
     missing=1
@@ -175,6 +213,46 @@ require_lib_bundle
 require_root
 require_ubuntu
 
+dispatch_subcommand() {
+  env_load_settings 2>/dev/null || true
+  case "$SUBCOMMAND" in
+    doctor)
+      if [ "${1:-}" = "--quick" ]; then
+        [ -n "${DOMAIN:-}" ] || die "Домен не задан"
+        run_doctor_quick "$DOMAIN"
+      else
+        run_doctor_full "${DOMAIN:-}"
+      fi
+      exit $?
+      ;;
+    link)
+      show_proxy_link "${1:-}"
+      exit 0
+      ;;
+    backup)
+      backup_create
+      exit 0
+      ;;
+    restore)
+      local file="${1:-}" force=0
+      [ "${2:-}" = "--force" ] && force=1
+      [ -n "$file" ] || die "Укажите архив: tg restore FILE [--force]"
+      backup_restore "$file" "$force"
+      exit 0
+      ;;
+    "")
+      return 0
+      ;;
+    *)
+      die "Неизвестная команда: $SUBCOMMAND (doctor|link|backup|restore)"
+      ;;
+  esac
+}
+
+if [ -n "$SUBCOMMAND" ]; then
+  dispatch_subcommand "$@"
+fi
+
 if [ "$STATUS" -eq 1 ]; then
   # shellcheck disable=SC1090
   [ -f "$STATE_FILE" ] && source "$STATE_FILE"
@@ -184,6 +262,12 @@ fi
 
 if [ "$CHECK_RKN" -eq 1 ]; then
   check_rkn_ip "$(get_public_ip)"
+  exit $?
+fi
+
+if [ "$DOCTOR" -eq 1 ]; then
+  env_load_settings 2>/dev/null || true
+  run_doctor_full "${DOMAIN:-}"
   exit $?
 fi
 
@@ -231,8 +315,8 @@ if has_action_flags; then
   exit 0
 fi
 
-if ! [ -t 0 ]; then
-  die "Нет интерактивного терминала. Используйте флаги: --help, --status, --domain, --uninstall"
+if ! [ -t 0 ] && [ -z "$SUBCOMMAND" ]; then
+  die "Нет интерактивного терминала. Используйте: --help, --status, --doctor, tg link, ..."
 fi
 
 export MENU_MODE=1

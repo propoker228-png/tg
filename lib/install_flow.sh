@@ -12,6 +12,7 @@ run_install_flow() {
   prereq_install
   nginx_install_temp
   ssl_obtain_cert "$DOMAIN"
+  ssl_install_renew_hook
   nginx_install_production
   telemt_install
   meko_install

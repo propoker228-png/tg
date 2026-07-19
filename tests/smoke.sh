@@ -115,6 +115,31 @@ check_install_summary_render() {
   )
 }
 
+check_backup_manifest_paths() {
+  (
+    DOMAIN="example.com"
+    SECRET_FILE="/root/telemt-secret.txt"
+    STATE_FILE="/root/telemt-deploy.state"
+    # shellcheck source=../lib/backup.sh
+    source "$ROOT/lib/backup.sh"
+    backup_collect_paths "example.com"
+    [ "${#BACKUP_PATHS[@]}" -ge 1 ]
+    paths=$(backup_manifest_paths_json "example.com")
+    echo "$paths" | jq -e '. | length >= 1' >/dev/null
+  )
+}
+
+check_doctor_aggregate() {
+  (
+    # shellcheck source=../lib/doctor.sh
+    source "$ROOT/lib/doctor.sh"
+    doctor_reset
+    doctor_record "test pass" pass
+    doctor_record "test fail" fail
+    [ "$DOCTOR_TOTAL" -eq 2 ] && [ "$DOCTOR_FAILED" -eq 1 ]
+  )
+}
+
 check_rkn_ip_lookup() {
   (
     # shellcheck source=../lib/rkn_check.sh
@@ -178,6 +203,8 @@ for f in "$ROOT/install.sh" "$ROOT"/lib/*.sh "$ROOT"/tests/smoke.sh "$ROOT/templ
   [ -f "$f" ] && check_syntax "$f"
 done
 
+check_cmd_ok "backup manifest paths" check_backup_manifest_paths
+check_cmd_ok "doctor aggregate counters" check_doctor_aggregate
 check_cmd_ok "rkn ip cache lookup" check_rkn_ip_lookup
 check_cmd_ok "parse release versions" check_parse_release_versions
 check_cmd_ok "install summary render" check_install_summary_render
