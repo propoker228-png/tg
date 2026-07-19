@@ -11,8 +11,14 @@ nginx_install_temp() {
   systemctl restart nginx
 }
 
+nginx_disable_conflicting_sites() {
+  rm -f /etc/nginx/sites-enabled/default
+  rm -f /etc/nginx/sites-enabled/telemt-acme-temp
+}
+
 nginx_install_production() {
   cp "$DEPLOY_ROOT/templates/index.html" /var/www/html/index.html
+  nginx_disable_conflicting_sites
   if install_is_ip_only; then
     export SSL_CERT_PATH SSL_KEY_PATH
     SSL_CERT_PATH="$(ssl_cert_path)"
@@ -24,7 +30,7 @@ nginx_install_production() {
       /etc/nginx/sites-available/telemt-site
   fi
   ln -sf /etc/nginx/sites-available/telemt-site /etc/nginx/sites-enabled/telemt-site
-  rm -f /etc/nginx/sites-enabled/telemt-acme-temp
+  nginx_disable_conflicting_sites
   nginx -t
   systemctl restart nginx
   log_ok "nginx self-mask настроен"

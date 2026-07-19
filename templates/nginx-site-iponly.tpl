@@ -1,5 +1,4 @@
 server {
-    listen 80 default_server;
     listen 127.0.0.1:8444 ssl default_server;
     server_name _;
     ssl_certificate ${SSL_CERT_PATH};
