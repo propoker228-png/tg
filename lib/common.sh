@@ -4,7 +4,7 @@
 set -euo pipefail
 
 DEPLOY_ROOT="${DEPLOY_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-COMMON_SH_VERSION="2.2"
+COMMON_SH_VERSION="2.3"
 TELEMT_BASELINE_VERSION="3.4.23"
 SECRET_FILE="/root/telemt-secret.txt"
 STATE_FILE="/root/telemt-deploy.state"
@@ -12,9 +12,11 @@ STATE_FILE="/root/telemt-deploy.state"
 # Colors
 if [ -t 1 ]; then
   RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'
-  BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
+  BLUE='\033[0;34m'; CYAN='\033[0;36m'; MAGENTA='\033[0;35m'; GRAY='\033[0;90m'
+  BOLD='\033[1m'; NC='\033[0m'
 else
-  RED=''; GREEN=''; YELLOW=''; BLUE=''; CYAN=''; BOLD=''; NC=''
+  RED=''; GREEN=''; YELLOW=''; BLUE=''; CYAN=''; MAGENTA=''; GRAY=''
+  BOLD=''; NC=''
 fi
 
 log_info()  { echo -e "${BLUE}[i]${NC} $*"; }
@@ -186,6 +188,16 @@ require_valid_telemt_version() {
   is_valid_telemt_version "$version" || die "Некорректная версия telemt: $version"
 }
 
+is_valid_meko_version() {
+  local version="$1"
+  [[ "$version" =~ ^[0-9]+(\.[0-9]+)*$ ]]
+}
+
+require_valid_meko_version() {
+  local version="$1"
+  is_valid_meko_version "$version" || die "Некорректная версия MEKO: $version"
+}
+
 confirm_yes() {
   local prompt="${1:-Продолжить?}"
   if is_auto_mode; then
@@ -275,6 +287,9 @@ save_state() {
 DOMAIN=$DOMAIN
 SECRET=$SECRET
 AD_TAG=${AD_TAG:-}
+TELEMT_VERSION=${TELEMT_VERSION:-}
+MEKO_VERSION=${MEKO_VERSION:-}
+MEKO_FULL=${MEKO_FULL:-0}
 DEPLOY_ROOT=$DEPLOY_ROOT
 INSTALLED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF

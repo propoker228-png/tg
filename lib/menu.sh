@@ -28,6 +28,7 @@ menu_install() {
     return 0
   fi
   prepare_install_domain
+  prepare_install_options
   run_install_flow
   pause_key_menu
 }

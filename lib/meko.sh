@@ -1,13 +1,44 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-MEKO_SH_VERSION="1.1"
+MEKO_SH_VERSION="1.2"
 MEKO_SYNFIX_VERSION="3.0.1"
 MEKO_VERSION_FILE="/opt/mtpr-simple/version"
 MEKO_APPLY_SCRIPT="/opt/mtpr-simple/apply-mtpr-synfix.sh"
+MEKO_RAW_BASE="https://raw.githubusercontent.com/Mekotofeuka/MTPROTO_FIX_By_MEKO"
 
 meko_bundled_version() {
   echo "$MEKO_SYNFIX_VERSION"
+}
+
+meko_tag_name() {
+  local version="$1"
+  [[ "$version" == v* ]] && printf '%s' "$version" || printf 'v%s' "$version"
+}
+
+meko_download_inline_script() {
+  local version="$1" dest="$2"
+  local tag paths=(
+    "mtpr-synfix-nft.sh"
+    "proxys/mtpr-synfix-nft.sh"
+    "apply-mtpr-synfix.sh"
+  )
+  local path url bundled
+
+  bundled="$(meko_bundled_version)"
+  if [ "$version" = "$bundled" ] && [ -f "$DEPLOY_ROOT/templates/apply-mtpr-synfix.sh" ]; then
+    cp "$DEPLOY_ROOT/templates/apply-mtpr-synfix.sh" "$dest"
+    return 0
+  fi
+
+  tag="$(meko_tag_name "$version")"
+  for path in "${paths[@]}"; do
+    url="${MEKO_RAW_BASE}/${tag}/${path}"
+    if curl -fsSL --max-time 30 "$url" -o "$dest" 2>/dev/null; then
+      return 0
+    fi
+  done
+  return 1
 }
 
 meko_installed_version() {
@@ -51,45 +82,71 @@ meko_write_version() {
   echo "$version" > "$MEKO_VERSION_FILE"
 }
 
-meko_install_inline() {
+meko_install_inline_at() {
+  local version="${1:-$(meko_bundled_version)}"
+  require_valid_meko_version "$version"
+
   mkdir -p /opt/mtpr-simple
   echo "443" > /opt/mtpr-simple/port
-  cp "$DEPLOY_ROOT/templates/apply-mtpr-synfix.sh" /opt/mtpr-simple/apply-mtpr-synfix.sh
+  meko_download_inline_script "$version" /opt/mtpr-simple/apply-mtpr-synfix.sh \
+    || die "Не удалось скачать MEKO inline v${version}"
   chmod +x /opt/mtpr-simple/apply-mtpr-synfix.sh
   cp "$DEPLOY_ROOT/templates/mtpr-synfix.service" /etc/systemd/system/mtpr-synfix.service
-  meko_write_version "$(meko_bundled_version)"
+  meko_write_version "$version"
   modprobe xt_u32 2>/dev/null || log_warn "xt_u32 не загружен — MEKO может не работать"
   modprobe xt_hashlimit 2>/dev/null || true
   systemctl daemon-reload
   systemctl enable mtpr-synfix
   systemctl restart mtpr-synfix
-  log_ok "MEKO SYN FIX (inline) v$(meko_bundled_version) установлен"
+  log_ok "MEKO SYN FIX (inline) v${version} установлен"
+}
+
+meko_install_inline() {
+  meko_install_inline_at "$(meko_bundled_version)"
 }
 
 meko_upgrade_inline() {
-  log_info "Обновление MEKO SYN FIX до v$(meko_bundled_version)..."
-  meko_install_inline
+  local version="${MEKO_VERSION:-$(meko_bundled_version)}"
+  log_info "Обновление MEKO SYN FIX до v${version}..."
+  meko_install_inline_at "$version"
   log_ok "MEKO SYN FIX обновлён до v$(meko_installed_version)"
 }
 
-meko_install_full() {
-  curl -fsSL https://raw.githubusercontent.com/Mekotofeuka/MTPROTO_FIX_By_MEKO/main/install_main.sh \
-    | bash </dev/null
+meko_install_full_at() {
+  local version="${1:-}"
+  local tag url tmp
+
+  [ -n "$version" ] || die "Версия MEKO Launcher не задана"
+  require_valid_meko_version "$version"
+  tag="$(meko_tag_name "$version")"
+  url="${MEKO_RAW_BASE}/${tag}/install_main.sh"
+  tmp=$(mktemp)
+  curl -fsSL --max-time 60 "$url" -o "$tmp" \
+    || die "Не удалось скачать MEKO Launcher install_main.sh для ${tag}"
+  bash "$tmp" </dev/tty 2>/dev/null || bash "$tmp" </dev/null
+  rm -f "$tmp"
   echo "/etc/telemt/telemt.toml" > /opt/mtpr-simple/config_path
-  bash /opt/mtpr-simple/main.sh -auto_install 443 </dev/null || true
-  log_ok "MEKO Launcher (mekopr) установлен"
+  if [ -f /opt/mtpr-simple/main.sh ]; then
+    bash /opt/mtpr-simple/main.sh -auto_install 443 </dev/tty 2>/dev/null \
+      || bash /opt/mtpr-simple/main.sh -auto_install 443 </dev/null || true
+  fi
+  meko_write_version "$version"
+  log_ok "MEKO Launcher (mekopr) v${version} установлен"
+}
+
+meko_install_full() {
+  meko_install_full_at "${MEKO_VERSION:-}"
 }
 
 meko_install() {
+  local version="${MEKO_VERSION:-$(meko_bundled_version)}"
   if [ "${MEKO_FULL:-0}" -eq 1 ]; then
-    meko_install_full
+    meko_install_full_at "$version"
+  elif meko_is_inline_installed && meko_update_available && [ -z "${MEKO_VERSION:-}" ]; then
+    log_info "Найдена устаревшая версия MEKO SYN FIX v$(meko_installed_version), обновляем..."
+    meko_upgrade_inline
   else
-    if meko_is_inline_installed && meko_update_available; then
-      log_info "Найдена устаревшая версия MEKO SYN FIX v$(meko_installed_version), обновляем..."
-      meko_upgrade_inline
-    else
-      meko_install_inline
-    fi
+    meko_install_inline_at "$version"
   fi
 }
 

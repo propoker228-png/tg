@@ -1,13 +1,13 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-INSTALL_FLOW_SH_VERSION="1.0"
+INSTALL_FLOW_SH_VERSION="1.1"
 
 run_install_flow() {
   [ -n "${DOMAIN:-}" ] || die "Домен обязателен"
   export DOMAIN
 
-  log_info "Старт установки для ${DOMAIN}"
+  log_info "Старт установки для $(hl_domain "$DOMAIN")"
 
   prereq_install
   nginx_install_temp
@@ -19,11 +19,8 @@ run_install_flow() {
   verify_install "$DOMAIN" || log_warn "Проверка выявила проблемы, продолжаем handoff"
 
   show_mtproxybot_handoff "$DOMAIN"
-  prompt_ad_tag
 
   if [ -n "${AD_TAG:-}" ]; then
-    export AD_TAG
-    telemt_write_config
     systemctl restart telemt
     wait_telemt_port_443 30 || log_warn "telemt перезапущен, ожидание порта 443 продолжается"
     verify_install "$DOMAIN" || log_warn "Проверка после применения ad_tag выявила проблемы"

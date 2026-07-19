@@ -8,19 +8,11 @@ resolve_telemt_version() {
     return
   fi
   local latest
-  latest=$(curl -fsS https://api.github.com/repos/telemt/telemt/releases/latest \
+  latest=$(curl -fsSL -H "User-Agent: telemt-deploy" \
+    https://api.github.com/repos/telemt/telemt/releases/latest \
     | jq -r .tag_name | sed 's/^v//')
   [ -n "$latest" ] && [ "$latest" != "null" ] || die "Не удалось получить latest версию telemt"
   require_valid_telemt_version "$latest"
-
-  if version_gt "$latest" "$TELEMT_BASELINE_VERSION"; then
-    log_warn "Версия $latest новее проверенной $TELEMT_BASELINE_VERSION" >&2
-    if is_auto_mode; then
-      log_warn "Авто-режим --yes: устанавливаем latest без интерактивного подтверждения" >&2
-    else
-      confirm_yes "Установить $latest?" || die "Отменено пользователем"
-    fi
-  fi
   echo "$latest"
 }
 

@@ -47,9 +47,10 @@ sudo bash install.sh
 |------|----------|
 | `--domain DOMAIN` | Домен с A-записью на этот сервер |
 | `--ad-tag HEX32` | `ad_tag` из @MTProxybot (32 hex-символа) |
-| `--telemt-version VER` | Версия telemt, например `3.4.23` |
-| `--meko-full` | Полный MEKO Launcher вместо inline SYN fix |
-| `--yes` | Без подтверждений; пропустить handoff и ввод `ad_tag` |
+| `--telemt-version VER` | Предвыбор версии telemt в меню версий |
+| `--meko-version VER` | Предвыбор версии MEKO в меню версий |
+| `--meko-full` | Предвыбор полного MEKO Launcher в меню типа |
+| `--yes` | Без лишних y/N; выбор версий остаётся интерактивным |
 | `--fresh` | Удалить найденную установку и поставить с нуля |
 | `--keep` | Оставить найденную установку как есть |
 | `--status` | Статус и число подключённых (без меню) |
@@ -65,11 +66,13 @@ sudo bash install.sh
 sudo bash install.sh
 ```
 
-Полностью автоматическая (домен + ad_tag):
+Полностью автоматическая (домен + ad_tag; версии выбираются в меню):
 
 ```bash
 sudo bash install.sh --domain example.com --ad-tag 13ea0123456789abcdef0123456789ab --yes
 ```
+
+Перед установкой скрипт покажет выбор **4 версий telemt** и **4 версий MEKO** (сначала тип: inline / full), затем цветную сводку параметров.
 
 Конкретная версия telemt:
 

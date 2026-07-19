@@ -50,6 +50,9 @@ check_helpers() {
     ! is_valid_ad_tag "not-a-tag"
     is_valid_telemt_version "3.4.23"
     ! is_valid_telemt_version "latest"
+    is_valid_meko_version "3.0.1"
+    is_valid_meko_version "0.19"
+    ! is_valid_meko_version "latest"
     version_gt "3.4.24" "3.4.23"
     ! version_gt "3.4.23" "3.4.23"
   )
@@ -82,6 +85,36 @@ check_resolve_explicit_version() {
   )
 }
 
+check_parse_release_versions() {
+  (
+    # shellcheck source=../lib/version_picker.sh
+    source "$ROOT/lib/version_picker.sh"
+    local json='[{"tag_name":"v3.4.22"},{"tag_name":"v3.4.24"},{"tag_name":"v3.4.23"}]'
+    local out
+    out=$(parse_release_versions_from_json "$json" 3)
+    [ "$(printf '%s\n' "$out" | sed -n '1p')" = "3.4.24" ]
+    [ "$(printf '%s\n' "$out" | sed -n '3p')" = "3.4.22" ]
+  )
+}
+
+check_install_summary_render() {
+  (
+    # shellcheck source=../lib/meko.sh
+    source "$ROOT/lib/meko.sh"
+    # shellcheck source=../lib/ui_highlight.sh
+    source "$ROOT/lib/ui_highlight.sh"
+    DOMAIN="example.com"
+    TELEMT_VERSION="3.4.24"
+    MEKO_VERSION="3.0.1"
+    MEKO_FULL=0
+    TELEMT_VERSION_HINT="★ latest"
+    out=$(print_install_summary)
+    [[ "$out" == *"example.com"* ]]
+    [[ "$out" == *"3.4.24"* ]]
+    [[ "$out" == *"3.0.1"* ]]
+  )
+}
+
 check_menu_keep_stops_install() {
   (
     # shellcheck source=../lib/menu.sh
@@ -94,6 +127,9 @@ check_menu_keep_stops_install() {
     }
     prepare_install_domain() {
       return 42
+    }
+    prepare_install_options() {
+      return 44
     }
     run_install_flow() {
       return 43
@@ -129,6 +165,8 @@ for f in "$ROOT/install.sh" "$ROOT"/lib/*.sh "$ROOT"/tests/smoke.sh "$ROOT/templ
   [ -f "$f" ] && check_syntax "$f"
 done
 
+check_cmd_ok "parse release versions" check_parse_release_versions
+check_cmd_ok "install summary render" check_install_summary_render
 check_cmd_ok "common helper validators" check_helpers
 check_cmd_ok "meko version helpers" check_meko_version_helpers
 check_cmd_ok "tg template present" check_tg_template
@@ -141,5 +179,6 @@ check_cmd_fail "invalid --domain value" bash "$ROOT/install.sh" --domain bad_dom
 check_cmd_fail "missing --ad-tag value" bash "$ROOT/install.sh" --ad-tag
 check_cmd_fail "invalid --ad-tag value" bash "$ROOT/install.sh" --ad-tag not-a-tag
 check_cmd_fail "invalid --telemt-version value" bash "$ROOT/install.sh" --telemt-version latest
+check_cmd_fail "invalid --meko-version value" bash "$ROOT/install.sh" --meko-version latest
 
 [ "$FAIL" -eq 0 ] && echo "ALL SYNTAX OK" || exit 1
