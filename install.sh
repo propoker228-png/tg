@@ -147,7 +147,7 @@ require_lib_bundle() {
     echo "[X] Отсутствует lib/menu.sh (v1.0) — скопируйте lib/menu.sh на сервер" >&2
     missing=1
   fi
-  if [ "${MONITOR_SH_VERSION:-}" != "1.0" ] && [ "${MONITOR_SH_VERSION:-}" != "1.1" ]; then
+  if [ "${MONITOR_SH_VERSION:-}" != "1.0" ] && [ "${MONITOR_SH_VERSION:-}" != "1.1" ] && [ "${MONITOR_SH_VERSION:-}" != "1.2" ]; then
     echo "[X] Устаревший lib/monitor.sh (нужен v1.0+) — скопируйте lib/monitor.sh на сервер" >&2
     missing=1
   fi

@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-MONITOR_SH_VERSION="1.1"
+MONITOR_SH_VERSION="1.2"
 MONITOR_INTERVAL="${MONITOR_INTERVAL:-4}"
 
 MONITOR_NET_IFACE=""
@@ -10,6 +10,8 @@ MONITOR_NET_TX_PREV=0
 MONITOR_NET_RX_PKT_PREV=0
 MONITOR_NET_TX_PKT_PREV=0
 MONITOR_NET_TS_PREV=0
+MONITOR_CPU_IDLE_PREV=0
+MONITOR_CPU_TOTAL_PREV=0
 
 monitor_default_iface() {
   local iface=""
@@ -43,6 +45,86 @@ monitor_reset_network_stats() {
   MONITOR_NET_RX_PKT_PREV=0
   MONITOR_NET_TX_PKT_PREV=0
   MONITOR_NET_TS_PREV=0
+  MONITOR_CPU_IDLE_PREV=0
+  MONITOR_CPU_TOTAL_PREV=0
+}
+
+monitor_read_mem_kib() {
+  awk -v key="$1" '$1 == key ":" { print $2; exit }' /proc/meminfo 2>/dev/null
+}
+
+monitor_format_mib() {
+  local kib="$1"
+  awk -v k="$kib" 'BEGIN {
+    if (k >= 1048576) printf "%.2f GiB", k / 1048576
+    else if (k >= 1024) printf "%.0f MiB", k / 1024
+    else printf "%.0f KiB", k
+  }'
+}
+
+monitor_format_percent() {
+  local value="$1"
+  awk -v v="$value" 'BEGIN { printf "%.1f%%", v }'
+}
+
+monitor_read_cpu_totals() {
+  awk '/^cpu / {
+    idle = $5 + $6
+    total = $2 + $3 + $4 + idle + $7 + $8 + $9 + $10
+    print total, idle
+    exit
+  }' /proc/stat 2>/dev/null
+}
+
+monitor_render_resources_panel() {
+  local mem_total mem_avail mem_used swap_total swap_free swap_used
+  local load1 load5 load15 ncpu cpu_line cpu_total cpu_idle cpu_pct
+  local top_proc
+
+  mem_total=$(monitor_read_mem_kib MemTotal)
+  mem_avail=$(monitor_read_mem_kib MemAvailable)
+  swap_total=$(monitor_read_mem_kib SwapTotal)
+  swap_free=$(monitor_read_mem_kib SwapFree)
+  [ -n "$mem_total" ] && [ -n "$mem_avail" ] || return 1
+  mem_used=$((mem_total - mem_avail))
+  swap_used=0
+  [ -n "$swap_total" ] && [ -n "$swap_free" ] && swap_used=$((swap_total - swap_free))
+
+  read -r load1 load5 load15 _ < /proc/loadavg 2>/dev/null || load1="?" load5="?" load15="?"
+  ncpu=$(nproc 2>/dev/null || echo 1)
+
+  echo -e "  ${BOLD}CPU / RAM${NC}"
+
+  cpu_line=$(monitor_read_cpu_totals)
+  if [ -n "$cpu_line" ]; then
+    read -r cpu_total cpu_idle <<< "$cpu_line"
+    if [ "$MONITOR_CPU_TOTAL_PREV" -gt 0 ] && [ "$cpu_total" -gt "$MONITOR_CPU_TOTAL_PREV" ]; then
+      cpu_pct=$(awk -v t="$cpu_total" -v ti="$MONITOR_CPU_TOTAL_PREV" \
+        -v i="$cpu_idle" -v ii="$MONITOR_CPU_IDLE_PREV" 'BEGIN {
+          dt = t - ti
+          if (dt <= 0) { print 0; exit }
+          printf "%.1f", (dt - (i - ii)) * 100 / dt
+        }')
+      echo -e "    ${CYAN}CPU${NC}  $(monitor_format_percent "$cpu_pct")  |  load: ${load1} / ${load5} / ${load15}  (${ncpu} CPU)"
+    else
+      echo -e "    ${CYAN}CPU${NC}  ${GRAY}измерение...${NC}  |  load: ${load1} / ${load5} / ${load15}  (${ncpu} CPU)"
+    fi
+    MONITOR_CPU_TOTAL_PREV=$cpu_total
+    MONITOR_CPU_IDLE_PREV=$cpu_idle
+  else
+    echo -e "    ${CYAN}CPU${NC}  ${GRAY}н/д${NC}  |  load: ${load1} / ${load5} / ${load15}"
+  fi
+
+  echo -e "    ${CYAN}RAM${NC}  $(monitor_format_mib "$mem_used") / $(monitor_format_mib "$mem_total")  ($(monitor_format_percent "$(awk -v u="$mem_used" -v t="$mem_total" 'BEGIN { if (t>0) printf "%.1f", u*100/t; else print 0 }')"))  |  avail: $(monitor_format_mib "$mem_avail")"
+  if [ "${swap_total:-0}" -gt 0 ]; then
+    echo -e "    ${CYAN}Swap${NC} $(monitor_format_mib "$swap_used") / $(monitor_format_mib "$swap_total")"
+  fi
+
+  top_proc=$(ps -eo pcpu,pmem,comm --sort=-%cpu 2>/dev/null | awk 'NR>1 && $3!="[" {print; exit}')
+  if [ -n "$top_proc" ]; then
+    echo -e "    ${GRAY}top CPU:${NC} ${top_proc}"
+  fi
+  echo ""
 }
 
 monitor_format_bytes_short() {
@@ -130,6 +212,7 @@ run_live_monitor() {
   while true; do
     clear
     render_menu_header "${INSTALLER_VERSION:-2.4}"
+    monitor_render_resources_panel
     monitor_render_network_panel
     echo "  Обновление каждые ${MONITOR_INTERVAL}s | q или 0 = выход"
     echo ""

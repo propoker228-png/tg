@@ -201,7 +201,12 @@ check_monitor_network_helpers() {
     source "$ROOT/lib/monitor.sh"
     [ "$(monitor_format_bitrate 59800000)" = "59.8 Mbit/s" ]
     [ "$(monitor_format_bytes_short 1048576)" = "1.0 MiB" ]
+    [ "$(monitor_format_mib 1048576)" = "1.00 GiB" ]
+    [ "$(monitor_format_percent 45.25)" = "45.3%" ]
     [ -n "$(monitor_default_iface)" ]
+    [ -n "$(monitor_read_mem_kib MemTotal)" ]
+    read -r _total _idle < <(monitor_read_cpu_totals)
+    [ -n "${_total:-}" ] && [ -n "${_idle:-}" ]
   )
 }
 
