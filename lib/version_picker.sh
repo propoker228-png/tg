@@ -189,7 +189,11 @@ prepare_install_options() {
   require_tty_for_picker
   echo ""
   log_info "Подготовка параметров установки"
-  echo -e "  Домен: $(hl_domain "$DOMAIN")"
+  if install_is_ip_only; then
+    echo -e "  Подключение: $(hl_domain "$DOMAIN") ${GRAY}(IP)${NC}"
+  else
+    echo -e "  Домен: $(hl_domain "$DOMAIN")"
+  fi
   prepare_install_mask_domain
   pick_telemt_version
   pick_meko_type

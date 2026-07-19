@@ -6,7 +6,8 @@
 # Без флагов — интерактивное меню управления (п. 1–11).
 #
 #   --domain DOMAIN         Домен (A-запись → этот сервер)
-#   --tls-domain DOMAIN     Домен маскировки TLS/SNI (по умолчанию = --domain)
+#   --tls-domain DOMAIN     Домен маскировки TLS/SNI (обязателен с --ip-only)
+#   --ip-only               Установка без своего домена (подключение по IP сервера)
 #   --ad-tag HEX32          ad_tag из @MTProxybot (32 hex)
 #   --telemt-version VER    Версия telemt (предвыбор в меню версий)
 #   --meko-version VER      Версия MEKO (предвыбор в меню версий)
@@ -43,7 +44,7 @@ remote_bootstrap() {
   fi
 }
 
-DOMAIN=""; TLS_DOMAIN=""; AD_TAG=""; TELEMT_VERSION=""; MEKO_VERSION=""; YES=0; MEKO_FULL=0; UNINSTALL=0
+DOMAIN=""; TLS_DOMAIN=""; INSTALL_IP_ONLY=0; AD_TAG=""; TELEMT_VERSION=""; MEKO_VERSION=""; YES=0; MEKO_FULL=0; UNINSTALL=0
 FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; CHECK_RKN=0; DOCTOR=0
 SUBCOMMAND=""
 
@@ -65,6 +66,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --domain) DOMAIN=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --tls-domain) TLS_DOMAIN=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
+    --ip-only) INSTALL_IP_ONLY=1; shift ;;
     --ad-tag) AD_TAG=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --telemt-version) TELEMT_VERSION=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --meko-version) MEKO_VERSION=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
@@ -88,7 +90,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE CHECK_RKN DOCTOR
+export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE CHECK_RKN DOCTOR INSTALL_IP_ONLY
 [ -n "$TLS_DOMAIN" ] && export TLS_DOMAIN
 [ -n "$AD_TAG" ] && export AD_TAG
 
@@ -106,13 +108,20 @@ if [ "$FRESH" -eq 1 ] && [ "$KEEP_EXISTING" -eq 1 ]; then
 fi
 
 validate_cli_inputs() {
-  if [ -n "$DOMAIN" ]; then
-    DOMAIN="$(require_valid_domain_name "$DOMAIN")"
-    export DOMAIN
-  fi
-  if [ -n "$TLS_DOMAIN" ]; then
+  if [ "${INSTALL_IP_ONLY:-0}" -eq 1 ]; then
+    [ -n "${TLS_DOMAIN:-}" ] || die "Флаг --ip-only требует --tls-domain"
+    DOMAIN="$(get_public_ip)"
     TLS_DOMAIN="$(require_valid_domain_name "$TLS_DOMAIN")"
-    export TLS_DOMAIN
+    export DOMAIN TLS_DOMAIN INSTALL_IP_ONLY
+  else
+    if [ -n "$DOMAIN" ]; then
+      DOMAIN="$(require_valid_domain_name "$DOMAIN")"
+      export DOMAIN
+    fi
+    if [ -n "$TLS_DOMAIN" ]; then
+      TLS_DOMAIN="$(require_valid_domain_name "$TLS_DOMAIN")"
+      export TLS_DOMAIN
+    fi
   fi
   [ -z "$AD_TAG" ] || require_valid_ad_tag "$AD_TAG"
   [ -z "$TELEMT_VERSION" ] || require_valid_telemt_version "$TELEMT_VERSION"
@@ -133,6 +142,7 @@ trap 'on_err $LINENO ${BASH_SOURCE[0]##*/}' ERR
 has_action_flags() {
   [ "$UNINSTALL" -eq 1 ] || [ "$STATUS" -eq 1 ] || [ "$CHECK_RKN" -eq 1 ] || [ "$FRESH" -eq 1 ] || \
     [ "$KEEP_EXISTING" -eq 1 ] || [ "$MEKO_UPGRADE" -eq 1 ] || [ -n "$DOMAIN" ] || [ -n "$TLS_DOMAIN" ] || \
+    [ "${INSTALL_IP_ONLY:-0}" -eq 1 ] || \
     [ -n "$AD_TAG" ] || [ -n "$TELEMT_VERSION" ] || [ -n "$MEKO_VERSION" ] || [ "$MEKO_FULL" -eq 1 ]
 }
 
@@ -162,8 +172,8 @@ require_lib_bundle() {
     echo "[X] Отсутствует lib/dialog.sh (v1.0) — скопируйте lib/dialog.sh на сервер" >&2
     missing=1
   fi
-  if [ "${INSTALL_FLOW_SH_VERSION:-}" != "1.1" ]; then
-    echo "[X] Устаревший lib/install_flow.sh (нужен v1.1) — скопируйте lib/install_flow.sh на сервер" >&2
+  if [ "${INSTALL_FLOW_SH_VERSION:-}" != "1.1" ] && [ "${INSTALL_FLOW_SH_VERSION:-}" != "1.2" ]; then
+    echo "[X] Устаревший lib/install_flow.sh (нужен v1.1+) — скопируйте lib/install_flow.sh на сервер" >&2
     missing=1
   fi
   if [ "${MEKO_SH_VERSION:-}" != "1.2" ] && [ "${MEKO_SH_VERSION:-}" != "1.3" ]; then
@@ -178,8 +188,8 @@ require_lib_bundle() {
     echo "[X] Отсутствует lib/version_picker.sh (v1.0) — скопируйте lib/version_picker.sh на сервер" >&2
     missing=1
   fi
-  if [ "${MASK_PICKER_SH_VERSION:-}" != "1.0" ]; then
-    echo "[X] Отсутствует lib/mask_picker.sh (v1.0) — скопируйте lib/mask_picker.sh на сервер" >&2
+  if [ "${MASK_PICKER_SH_VERSION:-}" != "1.0" ] && [ "${MASK_PICKER_SH_VERSION:-}" != "1.1" ]; then
+    echo "[X] Устаревший lib/mask_picker.sh (нужен v1.0+) — скопируйте lib/mask_picker.sh на сервер" >&2
     missing=1
   fi
   if [ "${RKN_CHECK_SH_VERSION:-}" != "1.0" ]; then

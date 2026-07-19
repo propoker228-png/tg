@@ -32,6 +32,10 @@ doctor_record() {
 
 doctor_check_dns() {
   local domain="$1" server_ip dns_ip
+  if install_is_ip_only || is_valid_ipv4 "$domain"; then
+    doctor_record "DNS" pass "режим IP, проверка пропущена"
+    return
+  fi
   server_ip=$(get_public_ip)
   dns_ip=$(lookup_domain_a "$domain" 2>/dev/null || true)
   if [ -z "$dns_ip" ]; then
@@ -60,6 +64,14 @@ doctor_check_rkn() {
 
 doctor_check_ssl() {
   local domain="$1" days
+  if install_is_ip_only; then
+    if [ -f /etc/telemt/selfsigned/fullchain.pem ]; then
+      doctor_record "SSL" pass "self-signed (режим IP)"
+    else
+      doctor_record "SSL" fail "self-signed сертификат не найден"
+    fi
+    return
+  fi
   days=$(ssl_cert_days_left "$domain")
   if [ "$days" -lt 0 ]; then
     doctor_record "SSL" fail "сертификат не найден"

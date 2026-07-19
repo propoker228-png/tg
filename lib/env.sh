@@ -43,7 +43,7 @@ env_load_settings() {
   if [ -f "$STATE_FILE" ]; then
     # shellcheck disable=SC1090
     source "$STATE_FILE"
-    export DOMAIN SECRET AD_TAG TLS_DOMAIN
+    export DOMAIN SECRET AD_TAG TLS_DOMAIN INSTALL_IP_ONLY
   fi
 
   if [ -z "${SECRET:-}" ] && [ -f "$SECRET_FILE" ]; then
@@ -70,6 +70,10 @@ env_load_settings() {
     export TLS_DOMAIN
   fi
   TLS_DOMAIN="${TLS_DOMAIN:-$DOMAIN}"
+  if [ -z "${INSTALL_IP_ONLY:-}" ] && is_valid_ipv4 "${DOMAIN:-}"; then
+    INSTALL_IP_ONLY=1
+  fi
+  export INSTALL_IP_ONLY
 
   [ -n "${AD_TAG:-}" ] && export AD_TAG
 }

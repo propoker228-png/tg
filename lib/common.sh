@@ -47,6 +47,28 @@ get_public_ip() {
     || hostname -I | awk '{print $1}'
 }
 
+is_valid_ipv4() {
+  local ip="$1" a b c d o
+  [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+  IFS='.' read -r a b c d <<< "$ip"
+  for o in "$a" "$b" "$c" "$d"; do
+    [ "$o" -le 255 ] 2>/dev/null || return 1
+  done
+  return 0
+}
+
+install_is_ip_only() {
+  [ "${INSTALL_IP_ONLY:-0}" -eq 1 ]
+}
+
+install_connect_label() {
+  if install_is_ip_only; then
+    printf 'IP %s' "${DOMAIN:-}"
+  else
+    printf '%s' "${DOMAIN:-}"
+  fi
+}
+
 telemt_listens_443() {
   local pid listeners
   pid=$(systemctl show telemt -p MainPID --value 2>/dev/null || echo 0)
@@ -123,13 +145,22 @@ wait_proxy_link() {
 render_template() {
   local tpl="$1" dest="$2"
   TLS_DOMAIN="${TLS_DOMAIN:-${DOMAIN:-}}"
-  if [ "${TLS_DOMAIN:-}" != "${DOMAIN:-}" ]; then
+  if install_is_ip_only; then
+    TLS_EMULATION=true
+  elif [ "${TLS_DOMAIN:-}" != "${DOMAIN:-}" ]; then
     TLS_EMULATION=true
   else
     TLS_EMULATION=false
   fi
   export DOMAIN TLS_DOMAIN TLS_EMULATION SECRET AD_TAG_LINE
-  envsubst '${DOMAIN} ${TLS_DOMAIN} ${TLS_EMULATION} ${SECRET} ${AD_TAG_LINE}' < "$tpl" > "$dest"
+  if install_is_ip_only; then
+    export SSL_CERT_PATH SSL_KEY_PATH
+    SSL_CERT_PATH="$(ssl_cert_path)"
+    SSL_KEY_PATH="$(ssl_key_path)"
+    envsubst '${DOMAIN} ${TLS_DOMAIN} ${TLS_EMULATION} ${SECRET} ${AD_TAG_LINE} ${SSL_CERT_PATH} ${SSL_KEY_PATH}' < "$tpl" > "$dest"
+  else
+    envsubst '${DOMAIN} ${TLS_DOMAIN} ${TLS_EMULATION} ${SECRET} ${AD_TAG_LINE}' < "$tpl" > "$dest"
+  fi
 }
 
 version_gt() {
@@ -305,6 +336,7 @@ save_state() {
   cat > "$STATE_FILE" <<EOF
 DOMAIN=$DOMAIN
 TLS_DOMAIN=$TLS_DOMAIN
+INSTALL_IP_ONLY=${INSTALL_IP_ONLY:-0}
 SECRET=$SECRET
 AD_TAG=${AD_TAG:-}
 TELEMT_VERSION=${TELEMT_VERSION:-}

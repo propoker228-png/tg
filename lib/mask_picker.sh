@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-MASK_PICKER_SH_VERSION="1.0"
+MASK_PICKER_SH_VERSION="1.1"
 MASK_SCAN_PARALLEL="${MASK_SCAN_PARALLEL:-24}"
 MASK_SCAN_TIMEOUT="${MASK_SCAN_TIMEOUT:-2}"
 
@@ -14,6 +14,12 @@ _mask_show() {
 }
 
 ensure_tls_domain() {
+  if install_is_ip_only; then
+    [ -n "${TLS_DOMAIN:-}" ] || return 1
+    TLS_DOMAIN="$(require_valid_domain_name "$TLS_DOMAIN")"
+    export TLS_DOMAIN
+    return 0
+  fi
   [ -n "${DOMAIN:-}" ] || return 1
   TLS_DOMAIN="${TLS_DOMAIN:-$DOMAIN}"
   TLS_DOMAIN="$(require_valid_domain_name "$TLS_DOMAIN")"
@@ -65,7 +71,7 @@ mask_probe_ip_cert_names() {
 
 mask_scan_subnet_hosts() {
   local cidr="$1" my_ip="$2"
-  local tmp out ip active=0 count hn
+  local tmp out ip active=0 count
   tmp=$(mktemp)
   out=$(mktemp)
 
@@ -106,7 +112,7 @@ PY
 
 mask_pick_from_scan_results() {
   local -a results=()
-  local choice="" i line hn ip
+  local choice="" i hn ip
 
   mapfile -t results < <(mask_scan_subnet_hosts "$@")
   if [ "${#results[@]}" -eq 0 ]; then
@@ -141,8 +147,64 @@ mask_pick_from_scan_results() {
   done
 }
 
+mask_pick_tls_domain_ip_only() {
+  local choice="" manual="" cidr my_ip
+
+  if [ -n "${TLS_DOMAIN:-}" ]; then
+    TLS_DOMAIN="$(require_valid_domain_name "$TLS_DOMAIN")"
+    export TLS_DOMAIN
+    return 0
+  fi
+
+  if is_auto_mode; then
+    die "В режиме --ip-only укажите --tls-domain"
+  fi
+
+  has_tty || die "Выбор маскировки требует TTY"
+
+  while true; do
+    _mask_show ""
+    _mask_show "${BOLD}Домен маскировки TLS (обязателен)${NC}"
+    _mask_show "  ${GRAY}Подключение клиентов:${NC} ${DOMAIN}:443 (IP)"
+    _mask_show "  1) Указать домен вручную"
+    _mask_show "  2) Сканировать соседние IP в подсети сервера"
+    _mask_show "  0) Отмена"
+    prompt_line choice "Выбор" "2"
+    case "$choice" in
+      1|manual)
+        prompt_line manual "Домен маскировки (SNI)" ""
+        manual="$(require_valid_domain_name "$manual")"
+        TLS_DOMAIN="$manual"
+        break
+        ;;
+      2|scan|neighbor|"")
+        my_ip=$(mask_server_ipv4)
+        cidr=$(mask_detect_scan_cidr "$my_ip")
+        log_info "IP сервера: ${my_ip}, подсеть: ${cidr}"
+        if mask_pick_from_scan_results "$cidr" "$my_ip"; then
+          break
+        fi
+        ;;
+      0|q|Q|exit|выход)
+        die "Установка отменена"
+        ;;
+      *)
+        log_warn "Введите 1, 2 или 0"
+        ;;
+    esac
+  done
+
+  export TLS_DOMAIN
+}
+
 prepare_install_mask_domain() {
   local choice="" manual="" cidr my_ip
+
+  if install_is_ip_only; then
+    mask_pick_tls_domain_ip_only
+    log_ok "Маскировка TLS: $(hl_domain "$TLS_DOMAIN") ${GRAY}(подключение: ${DOMAIN}:443)${NC}"
+    return 0
+  fi
 
   [ -n "${DOMAIN:-}" ] || die "Домен обязателен"
 

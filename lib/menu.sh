@@ -106,7 +106,16 @@ menu_ssl() {
   local cert="" days=0
 
   echo "=== SSL ==="
-  if [ -n "${DOMAIN:-}" ]; then
+  if install_is_ip_only; then
+    echo "  режим: только IP (без Let's Encrypt)"
+    echo "  маскировка: ${TLS_DOMAIN:-н/д}"
+    if [ -f /etc/telemt/selfsigned/fullchain.pem ]; then
+      echo "  self-signed: есть (/etc/telemt/selfsigned/)"
+      openssl x509 -in /etc/telemt/selfsigned/fullchain.pem -noout -dates 2>/dev/null || true
+    else
+      echo "  self-signed: отсутствует"
+    fi
+  elif [ -n "${DOMAIN:-}" ]; then
     cert="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
     echo "  домен: ${DOMAIN}"
     if [ -f "$cert" ]; then
