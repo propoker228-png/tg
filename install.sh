@@ -15,6 +15,7 @@
 #   --keep                  Оставить найденную установку как есть (без вопросов)
 #   --status                Показать статус и число подключённых (как в MEKO)
 #   --meko-upgrade          Обновить MEKO SYN FIX до версии из комплекта
+#   --check-rkn             Проверить IP сервера в реестре РКН (без меню)
 #   --uninstall             Удалить установленный стек
 #   -h, --help              Показать справку
 #
@@ -35,7 +36,7 @@ remote_bootstrap() {
 }
 
 DOMAIN=""; AD_TAG=""; TELEMT_VERSION=""; MEKO_VERSION=""; YES=0; MEKO_FULL=0; UNINSTALL=0
-FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0
+FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; CHECK_RKN=0
 
 require_arg_value() {
   local flag="$1" value="${2:-}"
@@ -58,6 +59,7 @@ while [ $# -gt 0 ]; do
     --keep|--keep-existing) KEEP_EXISTING=1; shift ;;
     --status) STATUS=1; shift ;;
     --meko-upgrade) MEKO_UPGRADE=1; shift ;;
+    --check-rkn) CHECK_RKN=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
     -h|--help)
       sed -n '2,20p' "$0"
@@ -70,14 +72,14 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE
+export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE CHECK_RKN
 [ -n "$AD_TAG" ] && export AD_TAG
 
 remote_bootstrap
 
 # shellcheck source=lib/common.sh
 source "$DEPLOY_ROOT/lib/common.sh"
-for mod in prereq dns nginx ssl telemt meko firewall dialog ui_highlight version_picker verify handoff uninstall env stats monitor install_flow cli_tools menu; do
+for mod in prereq dns nginx ssl telemt meko firewall dialog ui_highlight version_picker rkn_check verify handoff uninstall env stats monitor install_flow cli_tools menu; do
   # shellcheck source=/dev/null
   source "$DEPLOY_ROOT/lib/${mod}.sh"
 done
@@ -98,7 +100,7 @@ validate_cli_inputs() {
 
 validate_cli_inputs
 
-INSTALLER_VERSION="2.5"
+INSTALLER_VERSION="2.6"
 
 on_err() {
   echo "[X] Сбой установки (строка ${1:-?} в ${2:-install.sh})" >&2
@@ -108,7 +110,7 @@ on_err() {
 trap 'on_err $LINENO ${BASH_SOURCE[0]##*/}' ERR
 
 has_action_flags() {
-  [ "$UNINSTALL" -eq 1 ] || [ "$STATUS" -eq 1 ] || [ "$FRESH" -eq 1 ] || \
+  [ "$UNINSTALL" -eq 1 ] || [ "$STATUS" -eq 1 ] || [ "$CHECK_RKN" -eq 1 ] || [ "$FRESH" -eq 1 ] || \
     [ "$KEEP_EXISTING" -eq 1 ] || [ "$MEKO_UPGRADE" -eq 1 ] || [ -n "$DOMAIN" ] || \
     [ -n "$AD_TAG" ] || [ -n "$TELEMT_VERSION" ] || [ -n "$MEKO_VERSION" ] || [ "$MEKO_FULL" -eq 1 ]
 }
@@ -155,6 +157,10 @@ require_lib_bundle() {
     echo "[X] Отсутствует lib/version_picker.sh (v1.0) — скопируйте lib/version_picker.sh на сервер" >&2
     missing=1
   fi
+  if [ "${RKN_CHECK_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/rkn_check.sh (v1.0) — скопируйте lib/rkn_check.sh на сервер" >&2
+    missing=1
+  fi
   if [ "${CLI_TOOLS_SH_VERSION:-}" != "1.0" ]; then
     echo "[X] Отсутствует lib/cli_tools.sh (v1.0) — скопируйте lib/cli_tools.sh на сервер" >&2
     missing=1
@@ -174,6 +180,11 @@ if [ "$STATUS" -eq 1 ]; then
   [ -f "$STATE_FILE" ] && source "$STATE_FILE"
   show_proxy_status_panel
   exit 0
+fi
+
+if [ "$CHECK_RKN" -eq 1 ]; then
+  check_rkn_ip "$(get_public_ip)"
+  exit $?
 fi
 
 if [ "$MEKO_UPGRADE" -eq 1 ]; then

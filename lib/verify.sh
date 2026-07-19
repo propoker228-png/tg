@@ -52,6 +52,8 @@ verify_install() {
     export PROXY_LINK="$link"
   fi
 
+  check_rkn_ip "$(get_public_ip)" || true
+
   show_proxy_online_stats
 
   return "$fail"

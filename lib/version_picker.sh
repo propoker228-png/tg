@@ -171,6 +171,7 @@ prepare_install_options() {
   pick_meko_type
   pick_meko_version
   prompt_ad_tag_colored
+  check_rkn_ip "$(get_public_ip)" || true
   print_install_summary
   confirm_action "Начать установку?" || die "Установка отменена"
 }

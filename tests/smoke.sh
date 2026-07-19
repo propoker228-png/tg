@@ -115,6 +115,19 @@ check_install_summary_render() {
   )
 }
 
+check_rkn_ip_lookup() {
+  (
+    # shellcheck source=../lib/rkn_check.sh
+    source "$ROOT/lib/rkn_check.sh"
+    local tmp="$ROOT/.tmp-smoke-rkn"
+    mkdir -p "$tmp"
+    printf '%s\n' '["90.156.254.235","10.0.0.0/8"]' > "$tmp/cache.json"
+    [ "$(rkn_lookup_ip_in_cache "90.156.254.235" "$tmp/cache.json")" = "BLOCKED" ]
+    [ "$(rkn_lookup_ip_in_cache "8.8.8.8" "$tmp/cache.json")" = "FREE" ]
+    rm -rf "$tmp"
+  )
+}
+
 check_menu_keep_stops_install() {
   (
     # shellcheck source=../lib/menu.sh
@@ -165,6 +178,7 @@ for f in "$ROOT/install.sh" "$ROOT"/lib/*.sh "$ROOT"/tests/smoke.sh "$ROOT/templ
   [ -f "$f" ] && check_syntax "$f"
 done
 
+check_cmd_ok "rkn ip cache lookup" check_rkn_ip_lookup
 check_cmd_ok "parse release versions" check_parse_release_versions
 check_cmd_ok "install summary render" check_install_summary_render
 check_cmd_ok "common helper validators" check_helpers
