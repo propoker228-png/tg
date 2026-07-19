@@ -15,6 +15,14 @@ require_tty_for_picker() {
   has_tty || die "Интерактивный выбор версий требует TTY. Запустите: sudo bash install.sh"
 }
 
+_picker_show() {
+  if [ -w /dev/tty ] 2>/dev/null; then
+    printf '%b\n' "$*" >/dev/tty
+  else
+    printf '%b\n' "$*" >&2
+  fi
+}
+
 github_fetch_json() {
   local repo="$1"
   curl -fsSL --max-time 20 -H "User-Agent: telemt-deploy" \
@@ -40,7 +48,7 @@ fetch_telemt_release_versions() {
   printf '%s\n' "$versions"
 }
 
-fetch_meko_release_versions() {
+fetch_meko_full_release_versions() {
   local json versions bundled
   bundled="$(meko_bundled_version)"
   json=$(github_fetch_json "$MEKO_GITHUB_REPO" 2>/dev/null) || true
@@ -49,10 +57,14 @@ fetch_meko_release_versions() {
       | sed 's/^v//' | awk 'NF' | grep -E '^[0-9]+(\.[0-9]+)*$' | sort -V -r | head -n 4)
   fi
   if [ -z "$versions" ]; then
-    log_warn "Не удалось получить релизы MEKO с GitHub — используем bundled v${bundled}"
-    versions="$bundled"
+    log_warn "Не удалось получить релизы MEKO Launcher с GitHub"
+    versions="1.85"
   fi
   printf '%s\n' "$versions"
+}
+
+fetch_meko_release_versions() {
+  fetch_meko_full_release_versions
 }
 
 _pick_version_from_list() {
@@ -81,14 +93,14 @@ _pick_version_from_list() {
     return 0
   fi
 
-  echo ""
-  echo -e "${BOLD}${title}${NC}"
+  _picker_show ""
+  _picker_show "${BOLD}${title}${NC}"
   for i in "${!items[@]}"; do
     tag="${items[$i]}"
     label="$tag"
     [ "$i" -eq 0 ] && label="${tag} ★ latest"
     [ -n "$preselect" ] && [ "$tag" = "$preselect" ] && label="${label} (из флага)"
-    echo "  $((i + 1))) ${label}"
+    _picker_show "  $((i + 1))) ${label}"
   done
 
   while true; do
@@ -110,6 +122,7 @@ pick_telemt_version() {
   log_info "Выбор версии telemt..."
   selected=$(_pick_version_from_list "Версия telemt" "$preselect" 1 "${versions[@]}") \
     || die "Выбор версии telemt отменён"
+  selected="$(trim_whitespace "$selected")"
   require_valid_telemt_version "$selected"
   TELEMT_VERSION="$selected"
   export TELEMT_VERSION
@@ -150,15 +163,25 @@ pick_meko_type() {
 pick_meko_version() {
   local -a versions=()
   local selected preselect="${MEKO_VERSION:-}"
-  mapfile -t versions < <(fetch_meko_release_versions)
-  log_info "Выбор версии MEKO..."
-  selected=$(_pick_version_from_list "Версия MEKO" "$preselect" 0 "${versions[@]}") \
+  local mode="inline SYN FIX"
+
+  if [ "${MEKO_FULL:-0}" -eq 0 ]; then
+    MEKO_VERSION="$(meko_bundled_version)"
+    export MEKO_VERSION
+    log_info "MEKO inline SYN FIX — bundled v${MEKO_VERSION} (релизы Launcher, напр. v1.85, только для full)"
+    log_ok "MEKO: $(hl_meko "$mode" "$MEKO_VERSION")"
+    return
+  fi
+
+  mode="MEKO Launcher (full)"
+  mapfile -t versions < <(fetch_meko_full_release_versions)
+  log_info "Выбор версии MEKO Launcher..."
+  selected=$(_pick_version_from_list "Версия MEKO Launcher" "$preselect" 0 "${versions[@]}") \
     || die "Выбор версии MEKO отменён"
+  selected="$(trim_whitespace "$selected")"
   require_valid_meko_version "$selected"
   MEKO_VERSION="$selected"
   export MEKO_VERSION
-  local mode="inline SYN FIX"
-  [ "${MEKO_FULL:-0}" -eq 1 ] && mode="MEKO Launcher (full)"
   log_ok "MEKO: $(hl_meko "$mode" "$MEKO_VERSION")"
 }
 

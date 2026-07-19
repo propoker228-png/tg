@@ -33,7 +33,7 @@ doctor_record() {
 doctor_check_dns() {
   local domain="$1" server_ip dns_ip
   server_ip=$(get_public_ip)
-  dns_ip=$(dig +short A "$domain" 2>/dev/null | tail -1)
+  dns_ip=$(lookup_domain_a "$domain" 2>/dev/null || true)
   if [ -z "$dns_ip" ]; then
     doctor_record "DNS" fail "нет A-записи для $domain"
     return

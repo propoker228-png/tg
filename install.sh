@@ -147,8 +147,8 @@ require_lib_bundle() {
     echo "[X] Отсутствует lib/menu.sh (v1.0) — скопируйте lib/menu.sh на сервер" >&2
     missing=1
   fi
-  if [ "${MONITOR_SH_VERSION:-}" != "1.0" ]; then
-    echo "[X] Отсутствует lib/monitor.sh (v1.0) — скопируйте lib/monitor.sh на сервер" >&2
+  if [ "${MONITOR_SH_VERSION:-}" != "1.0" ] && [ "${MONITOR_SH_VERSION:-}" != "1.1" ]; then
+    echo "[X] Устаревший lib/monitor.sh (нужен v1.0+) — скопируйте lib/monitor.sh на сервер" >&2
     missing=1
   fi
   if [ "${DIALOG_SH_VERSION:-}" != "1.0" ]; then
@@ -159,8 +159,8 @@ require_lib_bundle() {
     echo "[X] Устаревший lib/install_flow.sh (нужен v1.1) — скопируйте lib/install_flow.sh на сервер" >&2
     missing=1
   fi
-  if [ "${MEKO_SH_VERSION:-}" != "1.2" ]; then
-    echo "[X] Устаревший lib/meko.sh (нужен v1.2) — скопируйте lib/meko.sh на сервер" >&2
+  if [ "${MEKO_SH_VERSION:-}" != "1.2" ] && [ "${MEKO_SH_VERSION:-}" != "1.3" ]; then
+    echo "[X] Устаревший lib/meko.sh (нужен v1.2+) — скопируйте lib/meko.sh на сервер" >&2
     missing=1
   fi
   if [ "${UI_HIGHLIGHT_SH_VERSION:-}" != "1.0" ]; then

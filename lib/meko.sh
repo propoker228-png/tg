@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-MEKO_SH_VERSION="1.2"
+MEKO_SH_VERSION="1.3"
 MEKO_SYNFIX_VERSION="3.0.1"
 MEKO_VERSION_FILE="/opt/mtpr-simple/version"
 MEKO_APPLY_SCRIPT="/opt/mtpr-simple/apply-mtpr-synfix.sh"
@@ -18,20 +18,26 @@ meko_tag_name() {
 
 meko_download_inline_script() {
   local version="$1" dest="$2"
+  local bundled
+
+  bundled="$(meko_bundled_version)"
+  if [ "$version" != "$bundled" ]; then
+    log_warn "inline SYN FIX v${version} не публикуется отдельно — используем bundled v${bundled}"
+  fi
+
+  if [ -f "$DEPLOY_ROOT/templates/apply-mtpr-synfix.sh" ]; then
+    cp "$DEPLOY_ROOT/templates/apply-mtpr-synfix.sh" "$dest"
+    return 0
+  fi
+
   local tag paths=(
     "mtpr-synfix-nft.sh"
     "proxys/mtpr-synfix-nft.sh"
     "apply-mtpr-synfix.sh"
   )
-  local path url bundled
+  local path url
 
-  bundled="$(meko_bundled_version)"
-  if [ "$version" = "$bundled" ] && [ -f "$DEPLOY_ROOT/templates/apply-mtpr-synfix.sh" ]; then
-    cp "$DEPLOY_ROOT/templates/apply-mtpr-synfix.sh" "$dest"
-    return 0
-  fi
-
-  tag="$(meko_tag_name "$version")"
+  tag="$(meko_tag_name "$bundled")"
   for path in "${paths[@]}"; do
     url="${MEKO_RAW_BASE}/${tag}/${path}"
     if curl -fsSL --max-time 30 "$url" -o "$dest" 2>/dev/null; then

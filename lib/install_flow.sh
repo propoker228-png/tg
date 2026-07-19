@@ -36,18 +36,44 @@ run_install_flow() {
 }
 
 prepare_install_domain() {
+  local dns_rc
+
   if port_in_use 443 && ! telemt_listens_443; then
     die "Порт 443 занят другим процессом. Освободите: ss -tlnp | grep 443"
   fi
 
-  if [ -z "${DOMAIN:-}" ]; then
-    prompt_line DOMAIN "Домен (A-запись → этот сервер)" ""
-  fi
-  [ -n "${DOMAIN:-}" ] || die "Домен обязателен"
-  DOMAIN="$(require_valid_domain_name "$DOMAIN")"
-  export DOMAIN
+  while true; do
+    if [ -z "${DOMAIN:-}" ]; then
+      prompt_line DOMAIN "Домен (A-запись → этот сервер)" ""
+    fi
+    [ -n "${DOMAIN:-}" ] || die "Домен обязателен"
+    DOMAIN="$(require_valid_domain_name "$DOMAIN")"
+    export DOMAIN
 
-  validate_domain_dns "$DOMAIN"
+    check_domain_dns "$DOMAIN"
+    dns_rc=$?
+    case "$dns_rc" in
+      0) break ;;
+      1)
+        if is_auto_mode; then
+          die "DNS: домен $DOMAIN не резолвится (нет A-записи)"
+        fi
+        if ! prompt_domain_dns_retry_or_exit; then
+          die "Установка отменена"
+        fi
+        DOMAIN=""
+        ;;
+      2)
+        if is_auto_mode; then
+          die "DNS не указывает на этот сервер"
+        fi
+        if confirm_yes "DNS не указывает на этот сервер. Продолжить установку?"; then
+          break
+        fi
+        DOMAIN=""
+        ;;
+    esac
+  done
 
   if ! is_auto_mode; then
     confirm_action "Начать установку для домена ${DOMAIN}?" || die "Установка отменена"

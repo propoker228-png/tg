@@ -195,6 +195,16 @@ check_meko_version_helpers() {
   )
 }
 
+check_monitor_network_helpers() {
+  (
+    # shellcheck source=../lib/monitor.sh
+    source "$ROOT/lib/monitor.sh"
+    [ "$(monitor_format_bitrate 59800000)" = "59.8 Mbit/s" ]
+    [ "$(monitor_format_bytes_short 1048576)" = "1.0 MiB" ]
+    [ -n "$(monitor_default_iface)" ]
+  )
+}
+
 check_tg_template() {
   grep -q '@DEPLOY_ROOT@' "$ROOT/templates/tg"
 }
@@ -210,6 +220,7 @@ check_cmd_ok "parse release versions" check_parse_release_versions
 check_cmd_ok "install summary render" check_install_summary_render
 check_cmd_ok "common helper validators" check_helpers
 check_cmd_ok "meko version helpers" check_meko_version_helpers
+check_cmd_ok "monitor network helpers" check_monitor_network_helpers
 check_cmd_ok "tg template present" check_tg_template
 check_cmd_ok "confirm_action cli fallback" check_confirm_action_cli_fallback
 check_cmd_ok "prompts do not leak to stdout" check_prompt_stdout_clean

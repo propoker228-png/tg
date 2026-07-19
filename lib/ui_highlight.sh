@@ -53,6 +53,9 @@ print_install_summary() {
 prompt_ad_tag_colored() {
   [ -n "${AD_TAG:-}" ] && return 0
 
+  log_info "ad_tag появится в @MTProxybot после регистрации прокси (сервер + секрет)."
+  log_info "При первой установке нажмите Enter — добавите позже в меню: 5) Настройки прокси"
+
   local attempt=0 tag=""
   while [ "$attempt" -lt 3 ]; do
     prompt_msg "${BOLD}ad_tag из @MTProxybot${NC} ${GRAY}(Enter = пропустить)${NC}: "
