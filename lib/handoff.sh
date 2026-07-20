@@ -3,8 +3,16 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 show_mtproxybot_handoff() {
   local domain="$1"
-  local link
-  link=$(fetch_proxy_link 2>/dev/null || echo "н/д")
+  local link=""
+
+  if declare -f cluster_load >/dev/null 2>&1; then
+    cluster_load 2>/dev/null || true
+  fi
+  if [ -n "${CLUSTER_DOMAIN:-}" ] && [ "${CLUSTER_ROLE:-}" != "standalone" ]; then
+    domain="$CLUSTER_DOMAIN"
+    link=$(cluster_get_proxy_link 2>/dev/null || true)
+  fi
+  [ -n "$link" ] || link=$(fetch_proxy_link 2>/dev/null || echo "н/д")
 
   echo ""
   echo -e "${BOLD}══════════════════════════════════════════════${NC}"

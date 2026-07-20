@@ -153,13 +153,15 @@ render_template() {
     TLS_EMULATION=false
   fi
   export DOMAIN TLS_DOMAIN TLS_EMULATION SECRET AD_TAG_LINE
+  export PUBLIC_HOST="${PUBLIC_HOST:-$DOMAIN}"
+  export TELEMT_TLS_DOMAIN="${TELEMT_TLS_DOMAIN:-${TLS_DOMAIN:-$DOMAIN}}"
   if install_is_ip_only; then
     export SSL_CERT_PATH SSL_KEY_PATH
     SSL_CERT_PATH="$(ssl_cert_path)"
     SSL_KEY_PATH="$(ssl_key_path)"
-    envsubst '${DOMAIN} ${TLS_DOMAIN} ${TLS_EMULATION} ${SECRET} ${AD_TAG_LINE} ${SSL_CERT_PATH} ${SSL_KEY_PATH}' < "$tpl" > "$dest"
+    envsubst '${DOMAIN} ${PUBLIC_HOST} ${TLS_DOMAIN} ${TELEMT_TLS_DOMAIN} ${TLS_EMULATION} ${SECRET} ${AD_TAG_LINE} ${SSL_CERT_PATH} ${SSL_KEY_PATH}' < "$tpl" > "$dest"
   else
-    envsubst '${DOMAIN} ${TLS_DOMAIN} ${TLS_EMULATION} ${SECRET} ${AD_TAG_LINE}' < "$tpl" > "$dest"
+    envsubst '${DOMAIN} ${PUBLIC_HOST} ${TLS_DOMAIN} ${TELEMT_TLS_DOMAIN} ${TLS_EMULATION} ${SECRET} ${AD_TAG_LINE}' < "$tpl" > "$dest"
   fi
 }
 

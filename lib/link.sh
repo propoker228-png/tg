@@ -27,7 +27,13 @@ show_proxy_link() {
   [ "${1:-}" = "--qr" ] && want_qr=1
 
   env_load_settings 2>/dev/null || true
+  if declare -f cluster_load >/dev/null 2>&1; then
+    cluster_load 2>/dev/null || true
+  fi
   link=$(fetch_proxy_link 2>/dev/null || true)
+  if [ -z "$link" ] && [ -n "${CLUSTER_DOMAIN:-}" ]; then
+    link=$(cluster_get_proxy_link 2>/dev/null || true)
+  fi
   if [ -z "$link" ]; then
     link=$(build_proxy_link_fallback 2>/dev/null || true)
     [ -n "$link" ] && log_warn "API недоступен — ссылка собрана из конфига"

@@ -264,6 +264,7 @@ main_menu() {
     echo "  9)  Проверки"
     echo "  10) Обновить telemt"
     echo "  11) Удалить стек"
+    echo "  12) Кластер / мульти-прокси"
     echo "  0)  Выход"
     echo ""
     prompt_line choice "Выбор" ""
@@ -282,6 +283,7 @@ main_menu() {
       9) menu_verify ;;
       10) menu_upgrade_telemt ;;
       11) menu_uninstall ;;
+      12) menu_cluster ;;
       0|q|Q) break ;;
       *) log_warn "Неверный выбор"; sleep 1 ;;
     esac

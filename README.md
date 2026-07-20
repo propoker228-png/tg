@@ -35,6 +35,7 @@ sudo bash install.sh
 | 9 | Проверки (быстрая / doctor) |
 | 10 | Обновить telemt |
 | 11 | Удалить стек |
+| 12 | Кластер / мульти-прокси |
 | 0 | Выход |
 
 В шапке меню: домен, версия telemt, **число подключённых** (жёлтым, как в MEKO), TCP, статусы сервисов.
@@ -58,7 +59,32 @@ sudo bash install.sh
 | `--doctor` | Полная диагностика (как `tg doctor`) |
 | `--meko-upgrade` | Обновить MEKO SYN FIX до версии из комплекта |
 | `--uninstall` | Удалить установленный стек |
+| `--role ROLE` | `standalone` \| `node` \| `lb` \| `master` (кластер) |
+| `--cluster-domain DOMAIN` | Публичный домен единой ссылки |
+| `--cluster-secret HEX` | Секрет кластера (для node) |
+| `--node SPEC` | Backend LB: `name:ip:port` (можно несколько раз) |
 | `-h`, `--help` | Справка |
+
+## Кластер / мульти-прокси
+
+Несколько telemt-нод за одним доменом и **одной** `tg://proxy`-ссылкой. HAProxy (TCP passthrough) балансирует нагрузку и исключает мёртвые ноды.
+
+```bash
+# 1. Master: инициализация кластера и SECRET
+sudo bash install.sh --role=master --cluster-domain proxy.example.com --yes
+
+# 2. Node: на каждом VPS (mask-домен + кластерный домен)
+sudo bash install.sh --role=node --domain mask1.example.com \
+  --cluster-domain proxy.example.com --cluster-secret HEX --fresh --yes
+
+# 3. LB: HAProxy на отдельном VPS (DNS proxy.example.com → IP LB)
+sudo bash install.sh --role=lb --cluster-domain proxy.example.com \
+  --node node1:203.0.113.10:443 --node node2:203.0.113.11:443 --yes
+```
+
+Управление через меню: пункт **12) Кластер / мульти-прокси**.
+
+Спецификация: [docs/superpowers/specs/2026-07-20-telemt-multi-proxy-design.md](docs/superpowers/specs/2026-07-20-telemt-multi-proxy-design.md)
 
 ## Примеры
 
@@ -127,6 +153,7 @@ sudo tg restore /root/telemt-backup-....tar.gz
 
 ```bash
 bash tests/smoke.sh          # синтаксис + безопасные helper/CLI проверки
+bash tests/cluster_smoke.sh  # кластер и HAProxy (без root)
 bash install.sh --help       # справка
 sudo tg                      # меню управления после установки
 ```

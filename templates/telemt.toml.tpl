@@ -10,7 +10,7 @@ secure = false
 tls = true
 
 [general.links]
-public_host = "${DOMAIN}"
+public_host = "${PUBLIC_HOST}"
 public_port = 443
 
 [server]
@@ -23,7 +23,7 @@ listen = "127.0.0.1:9091"
 whitelist = ["127.0.0.1/32"]
 
 [censorship]
-tls_domain = "${TLS_DOMAIN}"
+tls_domain = "${TELEMT_TLS_DOMAIN}"
 mask = true
 mask_host = "127.0.0.1"
 mask_port = 8444

@@ -3,7 +3,7 @@
 #
 # Использование: sudo bash install.sh [флаги]
 #
-# Без флагов — интерактивное меню управления (п. 1–11).
+# Без флагов — интерактивное меню управления (п. 1–12).
 #
 #   --domain DOMAIN         Домен (A-запись → этот сервер)
 #   --tls-domain DOMAIN     Домен маскировки TLS/SNI (обязателен с --ip-only)
@@ -20,6 +20,10 @@
 #   --check-rkn             Проверить IP сервера в реестре РКН (без меню)
 #   --doctor                Полная диагностика (tg doctor)
 #   --uninstall             Удалить установленный стек
+#   --role ROLE             standalone | node | lb | master (кластер)
+#   --cluster-domain DOMAIN Публичный домен ссылки (для кластера)
+#   --cluster-secret HEX    Секрет кластера (для node)
+#   --node SPEC             Backend для LB: name:ip:port (можно несколько раз)
 #
 # Подкоманды (через tg или install.sh):
 #   doctor [--quick]        Диагностика (полная или быстрая)
@@ -46,6 +50,8 @@ remote_bootstrap() {
 
 DOMAIN=""; TLS_DOMAIN=""; INSTALL_IP_ONLY=0; AD_TAG=""; TELEMT_VERSION=""; MEKO_VERSION=""; YES=0; MEKO_FULL=0; UNINSTALL=0
 FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; CHECK_RKN=0; DOCTOR=0
+CLUSTER_ROLE="standalone"; CLUSTER_DOMAIN=""; CLUSTER_SECRET=""
+CLUSTER_NODES=""
 SUBCOMMAND=""
 
 if [ $# -gt 0 ] && [[ "$1" != --* ]]; then
@@ -79,6 +85,10 @@ while [ $# -gt 0 ]; do
     --check-rkn) CHECK_RKN=1; shift ;;
     --doctor) DOCTOR=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
+    --role) CLUSTER_ROLE=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
+    --cluster-domain) CLUSTER_DOMAIN=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
+    --cluster-secret) CLUSTER_SECRET=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
+    --node) CLUSTER_NODES="$CLUSTER_NODES $(require_arg_value "$1" "${2:-}")"; shift 2 ;;
     -h|--help)
       sed -n '2,26p' "$0"
       exit 0
@@ -91,14 +101,20 @@ while [ $# -gt 0 ]; do
 done
 
 export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE CHECK_RKN DOCTOR INSTALL_IP_ONLY
+export CLUSTER_ROLE CLUSTER_DOMAIN CLUSTER_SECRET CLUSTER_NODES
 [ -n "$TLS_DOMAIN" ] && export TLS_DOMAIN
 [ -n "$AD_TAG" ] && export AD_TAG
+
+case "$CLUSTER_ROLE" in
+  standalone|node|lb|master) ;;
+  *) die "Неизвестная роль --role: $CLUSTER_ROLE (допустимо: standalone, node, lb, master)" ;;
+esac
 
 remote_bootstrap
 
 # shellcheck source=lib/common.sh
 source "$DEPLOY_ROOT/lib/common.sh"
-for mod in prereq dns nginx ssl ssl_renew telemt meko firewall dialog ui_highlight mask_picker version_picker rkn_check sni_check link backup doctor verify handoff uninstall env stats monitor install_flow cli_tools menu; do
+for mod in prereq dns nginx ssl ssl_renew telemt meko firewall dialog ui_highlight mask_picker version_picker rkn_check sni_check haproxy cluster link backup doctor verify handoff uninstall env stats monitor install_flow cli_tools menu; do
   # shellcheck source=/dev/null
   source "$DEPLOY_ROOT/lib/${mod}.sh"
 done
@@ -126,11 +142,15 @@ validate_cli_inputs() {
   [ -z "$AD_TAG" ] || require_valid_ad_tag "$AD_TAG"
   [ -z "$TELEMT_VERSION" ] || require_valid_telemt_version "$TELEMT_VERSION"
   [ -z "$MEKO_VERSION" ] || require_valid_meko_version "$MEKO_VERSION"
+  if [ -n "$CLUSTER_DOMAIN" ]; then
+    CLUSTER_DOMAIN="$(require_valid_domain_name "$CLUSTER_DOMAIN")"
+    export CLUSTER_DOMAIN
+  fi
 }
 
 validate_cli_inputs
 
-INSTALLER_VERSION="2.7"
+INSTALLER_VERSION="2.8"
 
 on_err() {
   echo "[X] Сбой установки (строка ${1:-?} в ${2:-install.sh})" >&2
@@ -143,7 +163,17 @@ has_action_flags() {
   [ "$UNINSTALL" -eq 1 ] || [ "$STATUS" -eq 1 ] || [ "$CHECK_RKN" -eq 1 ] || [ "$FRESH" -eq 1 ] || \
     [ "$KEEP_EXISTING" -eq 1 ] || [ "$MEKO_UPGRADE" -eq 1 ] || [ -n "$DOMAIN" ] || [ -n "$TLS_DOMAIN" ] || \
     [ "${INSTALL_IP_ONLY:-0}" -eq 1 ] || \
-    [ -n "$AD_TAG" ] || [ -n "$TELEMT_VERSION" ] || [ -n "$MEKO_VERSION" ] || [ "$MEKO_FULL" -eq 1 ]
+    [ -n "$AD_TAG" ] || [ -n "$TELEMT_VERSION" ] || [ -n "$MEKO_VERSION" ] || [ "$MEKO_FULL" -eq 1 ] || \
+    [ "$CLUSTER_ROLE" != "standalone" ] || [ -n "$CLUSTER_DOMAIN" ] || [ -n "${CLUSTER_NODES# }" ]
+}
+
+prepare_cluster_domain() {
+  if [ -z "${CLUSTER_DOMAIN:-}" ]; then
+    prompt_line CLUSTER_DOMAIN "Кластерный домен (для единой ссылки)" ""
+  fi
+  [ -n "${CLUSTER_DOMAIN:-}" ] || die "Кластерный домен обязателен"
+  CLUSTER_DOMAIN="$(require_valid_domain_name "$CLUSTER_DOMAIN")"
+  export CLUSTER_DOMAIN
 }
 
 require_lib_bundle() {
@@ -222,6 +252,14 @@ require_lib_bundle() {
   fi
   if [ "${CLI_TOOLS_SH_VERSION:-}" != "1.0" ]; then
     echo "[X] Отсутствует lib/cli_tools.sh (v1.0) — скопируйте lib/cli_tools.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${CLUSTER_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/cluster.sh (v1.0) — скопируйте lib/cluster.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${HAPROXY_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/haproxy.sh (v1.0) — скопируйте lib/haproxy.sh на сервер" >&2
     missing=1
   fi
   if [ "$missing" -eq 1 ]; then
@@ -327,6 +365,34 @@ show_install_banner() {
 
 if has_action_flags; then
   show_install_banner
+  case "$CLUSTER_ROLE" in
+    master)
+      prepare_cluster_domain
+      if ! is_auto_mode; then
+        confirm_yes "Инициализировать кластер ${CLUSTER_DOMAIN}?" || die "Отменено"
+      fi
+      run_cluster_master_init
+      exit 0
+      ;;
+    lb)
+      prepare_cluster_domain
+      if ! is_auto_mode; then
+        confirm_yes "Установить LB для ${CLUSTER_DOMAIN}?" || die "Отменено"
+      fi
+      run_cluster_lb_install
+      exit 0
+      ;;
+    node)
+      set +e
+      handle_existing_env
+      set -euo pipefail
+      prepare_install_domain
+      prepare_cluster_domain
+      prepare_install_options
+      run_cluster_node_install
+      exit 0
+      ;;
+  esac
   set +e
   handle_existing_env
   set -euo pipefail

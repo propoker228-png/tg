@@ -76,6 +76,11 @@ env_load_settings() {
   export INSTALL_IP_ONLY
 
   [ -n "${AD_TAG:-}" ] && export AD_TAG
+
+  if declare -f cluster_load >/dev/null 2>&1; then
+    cluster_load 2>/dev/null || true
+    export CLUSTER_ROLE CLUSTER_DOMAIN CLUSTER_SSH_USER
+  fi
 }
 
 env_show_summary() {

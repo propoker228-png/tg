@@ -27,6 +27,16 @@ uninstall_all() {
   rm -rf /opt/mtpr-simple
   remove_tg_command
   rm -f "$STATE_FILE"
+
+  if [ -f /etc/telemt-deploy.cluster ]; then
+    # shellcheck disable=SC1090
+    source /etc/telemt-deploy.cluster
+    if [ "${ROLE:-}" = "lb" ]; then
+      systemctl stop haproxy 2>/dev/null || true
+      systemctl disable haproxy 2>/dev/null || true
+    fi
+  fi
+
   # SECRET_FILE и letsencrypt оставляем
 
   systemctl daemon-reload

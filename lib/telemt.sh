@@ -35,6 +35,13 @@ telemt_write_config() {
   else
     export AD_TAG_LINE=""
   fi
+  if [ "${CLUSTER_ROLE:-}" = "node" ] && [ -n "${CLUSTER_DOMAIN:-}" ]; then
+    export PUBLIC_HOST="$CLUSTER_DOMAIN"
+    export TELEMT_TLS_DOMAIN="$CLUSTER_DOMAIN"
+  else
+    export PUBLIC_HOST="${DOMAIN}"
+    export TELEMT_TLS_DOMAIN="${TLS_DOMAIN:-$DOMAIN}"
+  fi
   render_template "$DEPLOY_ROOT/templates/telemt.toml.tpl" /etc/telemt/telemt.toml
   chown root:telemt /etc/telemt/telemt.toml
   chmod 640 /etc/telemt/telemt.toml
