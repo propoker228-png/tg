@@ -110,7 +110,6 @@ case "$CLUSTER_ROLE" in
   standalone|node|lb|master|master_lb|master-lb) ;;
   *) echo "Неизвестная роль --role: $CLUSTER_ROLE (допустимо: standalone, node, lb, master, master_lb)" >&2; exit 1 ;;
 esac
-[ "$CLUSTER_ROLE" = "master-lb" ] && CLUSTER_ROLE=master_lb
 export CLUSTER_ROLE
 
 remote_bootstrap

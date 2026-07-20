@@ -98,11 +98,30 @@ else
   fail "cluster_init_master"
 fi
 
-# --- master_lb: cluster_fetch_secret_ssh exists ---
-if declare -f cluster_fetch_secret_ssh >/dev/null 2>&1; then
-  pass "cluster_fetch_secret_ssh defined"
+# --- master_lb: cluster_fetch_secret_ssh behavioral (mock scp) ---
+FAKE_REMOTE_SECRET="$TMP/remote-secret.txt"
+echo "0123456789abcdef0123456789abcdef" > "$FAKE_REMOTE_SECRET"
+mkdir -p "$TMP/bin"
+cat > "$TMP/bin/scp" <<EOF
+#!/bin/bash
+dest="\${!#}"
+cp "$FAKE_REMOTE_SECRET" "\$dest"
+exit 0
+EOF
+chmod +x "$TMP/bin/scp"
+rm -f "$SECRET_FILE"
+unset SECRET
+export PATH="$TMP/bin:$PATH"
+if cluster_fetch_secret_ssh "203.0.113.10" "root"; then
+  pass "cluster_fetch_secret_ssh"
 else
-  fail "cluster_fetch_secret_ssh defined"
+  fail "cluster_fetch_secret_ssh"
+fi
+if [ -f "$SECRET_FILE" ] \
+  && [ "${SECRET:-}" = "0123456789abcdef0123456789abcdef" ]; then
+  pass "cluster_fetch_secret_ssh exports SECRET"
+else
+  fail "cluster_fetch_secret_ssh exports SECRET (SECRET=${SECRET:-empty})"
 fi
 
 # --- master_lb: init without nodes (no haproxy cfg required) ---
@@ -122,6 +141,30 @@ if [ -f "$SECRET_FILE" ] && [ -s "$SECRET_FILE" ]; then
   pass "run_cluster_master_lb_install saves secret"
 else
   fail "run_cluster_master_lb_install saves secret"
+fi
+
+# --- master_lb: 1 node reaches haproxy path (mocked deploy) ---
+cat > "$CLUSTER_NODES_FILE" <<EOF
+node1 203.0.113.10 443
+EOF
+export CLUSTER_DOMAIN="proxy.example.com"
+HAPROXY_DEPLOY_CALLED=0
+prereq_install_minimal() { :; }
+haproxy_deploy() { HAPROXY_DEPLOY_CALLED=1; }
+firewall_setup() { :; }
+port_in_use() { return 1; }
+haproxy_listens_443() { return 1; }
+run_cluster_master_lb_install
+
+if [ -s "$CLUSTER_NODES_FILE" ] && grep -q "node1" "$CLUSTER_NODES_FILE"; then
+  pass "run_cluster_master_lb_install keeps nodes file with 1 node"
+else
+  fail "run_cluster_master_lb_install keeps nodes file with 1 node"
+fi
+if [ "$HAPROXY_DEPLOY_CALLED" -eq 1 ]; then
+  pass "run_cluster_master_lb_install reaches haproxy with 1 node"
+else
+  fail "run_cluster_master_lb_install reaches haproxy with 1 node"
 fi
 
 if [ "$FAIL" -eq 0 ]; then
