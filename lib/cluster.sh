@@ -351,7 +351,9 @@ menu_cluster() {
     echo "  3) Удалить ноду"
     echo "  4) Пересобрать HAProxy"
     echo "  5) Синхронизировать SECRET на ноды (SSH)"
-    echo "  6) Установить HAProxy (роль lb)"
+    if [ "${CLUSTER_ROLE:-}" != "master_lb" ] || ! systemctl is-active --quiet haproxy 2>/dev/null; then
+      echo "  6) Установить HAProxy (роль lb / master_lb)"
+    fi
     echo "  0) Назад"
     prompt_line c "Выбор" ""
     case "$c" in
