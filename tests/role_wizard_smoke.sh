@@ -30,4 +30,8 @@ summary=$(print_role_summary "node")
 echo "$summary" | grep -q "proxy.example.com" && pass "print_role_summary cluster domain" \
   || fail "print_role_summary cluster domain"
 
+is_valid_cluster_secret_hex "0123456789abcdef0123456789abcdef" && pass "secret hex valid" \
+  || fail "secret hex valid"
+! is_valid_cluster_secret_hex "short" && pass "secret hex invalid" || fail "secret hex invalid"
+
 [ "$FAIL" -eq 0 ] && echo "ALL ROLE WIZARD SMOKE OK" || exit 1

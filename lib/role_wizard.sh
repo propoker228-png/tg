@@ -85,5 +85,57 @@ wizard_standalone() {
   run_install_flow
 }
 
-wizard_cluster_node() { die "wizard_cluster_node: not implemented"; }
+is_valid_cluster_secret_hex() {
+  [[ "${1:-}" =~ ^[0-9a-fA-F]{32}$ ]]
+}
+
+prompt_cluster_secret() {
+  local mode="" master_ip="" ssh_user="root" attempt=0 secret_in=""
+  echo ""
+  echo -e "${BOLD}=== SECRET кластера ===${NC}"
+  echo "  1) Ввести вручную (32 hex)"
+  echo "  2) Скачать с master по SSH"
+  prompt_line mode "Способ" "1"
+  case "$mode" in
+    2|ssh)
+      prompt_line master_ip "IP master" ""
+      [ -n "$master_ip" ] || die "IP master обязателен"
+      prompt_line ssh_user "SSH user" "root"
+      if cluster_fetch_secret_ssh "$master_ip" "$ssh_user"; then
+        CLUSTER_SECRET="$SECRET"
+        export CLUSTER_SECRET
+        return 0
+      fi
+      log_warn "SSH не удался — введите SECRET вручную"
+      ;;
+  esac
+  while [ "$attempt" -lt 3 ]; do
+    prompt_line secret_in "SECRET (32 hex)" ""
+    if is_valid_cluster_secret_hex "$secret_in"; then
+      CLUSTER_SECRET="$secret_in"
+      SECRET="$secret_in"
+      export CLUSTER_SECRET SECRET
+      echo "$SECRET" > "$SECRET_FILE"
+      chmod 600 "$SECRET_FILE"
+      return 0
+    fi
+    log_warn "SECRET должен быть 32 hex-символа"
+    attempt=$((attempt + 1))
+  done
+  die "SECRET не задан"
+}
+
+wizard_cluster_node() {
+  prompt_line CLUSTER_DOMAIN "Кластерный домен (единая ссылка)" "${CLUSTER_DOMAIN:-}"
+  CLUSTER_DOMAIN="$(require_valid_domain_name "$CLUSTER_DOMAIN")"
+  export CLUSTER_DOMAIN CLUSTER_ROLE=node
+
+  prepare_install_domain
+  prompt_cluster_secret
+  prepare_install_options
+
+  print_role_summary "node"
+  confirm_action "Начать установку ноды кластера?" || die "Отменено"
+  run_cluster_node_install
+}
 wizard_master_lb() { die "wizard_master_lb: not implemented"; }
