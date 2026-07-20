@@ -98,6 +98,32 @@ else
   fail "cluster_init_master"
 fi
 
+# --- master_lb: cluster_fetch_secret_ssh exists ---
+if declare -f cluster_fetch_secret_ssh >/dev/null 2>&1; then
+  pass "cluster_fetch_secret_ssh defined"
+else
+  fail "cluster_fetch_secret_ssh defined"
+fi
+
+# --- master_lb: init without nodes (no haproxy cfg required) ---
+> "$CLUSTER_NODES_FILE"
+export CLUSTER_DOMAIN="proxy.example.com"
+export CLUSTER_ROLE=master_lb
+env_load_settings() { :; }
+run_cluster_master_lb_install
+
+if grep -q '^ROLE=master_lb' "$CLUSTER_FILE" 2>/dev/null; then
+  pass "run_cluster_master_lb_install sets master_lb role"
+else
+  fail "run_cluster_master_lb_install sets master_lb role"
+fi
+
+if [ -f "$SECRET_FILE" ] && [ -s "$SECRET_FILE" ]; then
+  pass "run_cluster_master_lb_install saves secret"
+else
+  fail "run_cluster_master_lb_install saves secret"
+fi
+
 if [ "$FAIL" -eq 0 ]; then
   echo "ALL CLUSTER SMOKE OK"
 else

@@ -20,7 +20,7 @@
 #   --check-rkn             Проверить IP сервера в реестре РКН (без меню)
 #   --doctor                Полная диагностика (tg doctor)
 #   --uninstall             Удалить установленный стек
-#   --role ROLE             standalone | node | lb | master (кластер)
+#   --role ROLE             standalone | node | lb | master | master_lb (кластер)
 #   --cluster-domain DOMAIN Публичный домен ссылки (для кластера)
 #   --cluster-secret HEX    Секрет кластера (для node)
 #   --node SPEC             Backend для LB: name:ip:port (можно несколько раз)
@@ -101,14 +101,17 @@ while [ $# -gt 0 ]; do
 done
 
 export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE CHECK_RKN DOCTOR INSTALL_IP_ONLY
+[ "$CLUSTER_ROLE" = "master-lb" ] && CLUSTER_ROLE=master_lb
 export CLUSTER_ROLE CLUSTER_DOMAIN CLUSTER_SECRET CLUSTER_NODES
 [ -n "$TLS_DOMAIN" ] && export TLS_DOMAIN
 [ -n "$AD_TAG" ] && export AD_TAG
 
 case "$CLUSTER_ROLE" in
-  standalone|node|lb|master) ;;
-  *) die "Неизвестная роль --role: $CLUSTER_ROLE (допустимо: standalone, node, lb, master)" ;;
+  standalone|node|lb|master|master_lb|master-lb) ;;
+  *) echo "Неизвестная роль --role: $CLUSTER_ROLE (допустимо: standalone, node, lb, master, master_lb)" >&2; exit 1 ;;
 esac
+[ "$CLUSTER_ROLE" = "master-lb" ] && CLUSTER_ROLE=master_lb
+export CLUSTER_ROLE
 
 remote_bootstrap
 
@@ -372,6 +375,11 @@ if has_action_flags; then
         confirm_yes "Инициализировать кластер ${CLUSTER_DOMAIN}?" || die "Отменено"
       fi
       run_cluster_master_init
+      exit 0
+      ;;
+    master_lb|master-lb)
+      prepare_cluster_domain
+      run_cluster_master_lb_install
       exit 0
       ;;
     lb)

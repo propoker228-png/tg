@@ -117,6 +117,22 @@ cluster_import_secret() {
   return 1
 }
 
+cluster_fetch_secret_ssh() {
+  local master_ip="$1" ssh_user="${2:-root}"
+  [ -n "$master_ip" ] || return 1
+  log_info "Получение SECRET с ${ssh_user}@${master_ip}..."
+  if scp -o BatchMode=yes -o ConnectTimeout=10 \
+    "${ssh_user}@${master_ip}:${SECRET_FILE}" "$SECRET_FILE" 2>/dev/null; then
+    chmod 600 "$SECRET_FILE"
+    SECRET=$(cat "$SECRET_FILE")
+    export SECRET
+    log_ok "SECRET получен с master"
+    return 0
+  fi
+  log_warn "Не удалось получить SECRET по SSH с ${master_ip}"
+  return 1
+}
+
 cluster_sync_secret_ssh() {
   local name ip port ssh_user line
   cluster_load
@@ -286,6 +302,40 @@ run_cluster_node_install() {
 run_cluster_master_init() {
   cluster_init_master "${CLUSTER_DOMAIN}"
   cluster_show_status
+}
+
+run_cluster_master_lb_install() {
+  cluster_load
+  [ -n "${CLUSTER_DOMAIN:-}" ] || die "CLUSTER_DOMAIN обязателен для master+lb"
+
+  if [ -n "${CLUSTER_NODES:-}" ]; then
+    local spec name ip port
+    for spec in $CLUSTER_NODES; do
+      IFS=: read -r name ip port <<< "$spec"
+      cluster_add_node "$name" "$ip" "${port:-443}"
+    done
+  fi
+
+  cluster_init_master "${CLUSTER_DOMAIN}"
+  CLUSTER_ROLE=master_lb
+  cluster_save
+
+  if [ ! -s "$CLUSTER_NODES_FILE" ]; then
+    log_warn "Ноды не добавлены — HAProxy не запускается"
+    log_info "Добавьте ноды: меню → 12) Кластер / мульти-прокси"
+    cluster_show_status
+    return 0
+  fi
+
+  if port_in_use "$LB_PORT" && ! haproxy_listens_443; then
+    die "Порт ${LB_PORT} занят другим процессом"
+  fi
+
+  prereq_install_minimal
+  haproxy_deploy
+  firewall_setup
+  cluster_show_status
+  log_ok "Master+LB установлен для ${CLUSTER_DOMAIN}"
 }
 
 menu_cluster() {

@@ -39,3 +39,11 @@ prereq_install() {
   setup_telemt_user
   log_ok "Пакеты и sysctl настроены"
 }
+
+prereq_install_minimal() {
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y -qq curl wget openssl ufw gettext-base
+  setup_sysctl
+  log_ok "Минимальные пакеты для Master+LB установлены"
+}
