@@ -2,6 +2,8 @@
 
 Автоустановка **telemt** + **nginx self-mask** + **MEKO SYN FIX** на Ubuntu 22.04/24.04.
 
+Установщик **v2.9** — универсальный мастер ролей: одиночный прокси, нода кластера или master+LB.
+
 ## Быстрый старт
 
 ```bash
@@ -24,7 +26,7 @@ sudo bash install.sh
 
 | # | Действие |
 |---|----------|
-| 1 | Установка / переустановка |
+| 1 | Установка / переустановка (мастер ролей) |
 | 2 | Статистика (разово, список IP) |
 | 3 | Мониторинг live (обновление каждые 4 с, `q` — выход) |
 | 4 | Сервисы (restart, логи) |
@@ -37,6 +39,16 @@ sudo bash install.sh
 | 11 | Удалить стек |
 | 12 | Кластер / мульти-прокси |
 | 0 | Выход |
+
+При выборе **1) Установка** откроется **мастер ролей** (installer v2.9):
+
+| # | Роль | Компоненты |
+|---|------|------------|
+| 1 | Одиночный прокси | telemt + nginx + MEKO |
+| 2 | Нода кластера | telemt + nginx + MEKO, общий SECRET |
+| 3 | Master + балансировщик | HAProxy + управление кластером |
+
+Мастер задаёт только недостающие вопросы для выбранной роли, показывает сводку и запрашивает подтверждение.
 
 В шапке меню: домен, версия telemt, **число подключённых** (жёлтым, как в MEKO), TCP, статусы сервисов.
 
@@ -59,7 +71,7 @@ sudo bash install.sh
 | `--doctor` | Полная диагностика (как `tg doctor`) |
 | `--meko-upgrade` | Обновить MEKO SYN FIX до версии из комплекта |
 | `--uninstall` | Удалить установленный стек |
-| `--role ROLE` | `standalone` \| `node` \| `lb` \| `master` (кластер) |
+| `--role ROLE` | `standalone` \| `node` \| `lb` \| `master` \| `master-lb` (кластер) |
 | `--cluster-domain DOMAIN` | Публичный домен единой ссылки |
 | `--cluster-secret HEX` | Секрет кластера (для node) |
 | `--node SPEC` | Backend LB: `name:ip:port` (можно несколько раз) |
@@ -70,17 +82,23 @@ sudo bash install.sh
 Несколько telemt-нод за одним доменом и **одной** `tg://proxy`-ссылкой. HAProxy (TCP passthrough) балансирует нагрузку и исключает мёртвые ноды.
 
 ```bash
-# 1. Master: инициализация кластера и SECRET
+# 1. Master + LB (v2.9): HAProxy и управление кластером на одном VPS
+sudo bash install.sh --role=master-lb --cluster-domain proxy.example.com \
+  --node node1:203.0.113.10:443 --node node2:203.0.113.11:443 --yes
+
+# 2. Master (legacy): инициализация кластера и SECRET
 sudo bash install.sh --role=master --cluster-domain proxy.example.com --yes
 
-# 2. Node: на каждом VPS (mask-домен + кластерный домен)
+# 3. Node: на каждом VPS (mask-домен + кластерный домен)
 sudo bash install.sh --role=node --domain mask1.example.com \
   --cluster-domain proxy.example.com --cluster-secret HEX --fresh --yes
 
-# 3. LB: HAProxy на отдельном VPS (DNS proxy.example.com → IP LB)
+# 4. LB (legacy): HAProxy на отдельном VPS (DNS proxy.example.com → IP LB)
 sudo bash install.sh --role=lb --cluster-domain proxy.example.com \
   --node node1:203.0.113.10:443 --node node2:203.0.113.11:443 --yes
 ```
+
+Интерактивно: пункт меню **1)** → роль **3) Master + балансировщик** (или **2) Нода кластера**).
 
 Управление через меню: пункт **12) Кластер / мульти-прокси**.
 
@@ -152,10 +170,11 @@ sudo tg restore /root/telemt-backup-....tar.gz
 ## Проверка
 
 ```bash
-bash tests/smoke.sh          # синтаксис + безопасные helper/CLI проверки
-bash tests/cluster_smoke.sh  # кластер и HAProxy (без root)
-bash install.sh --help       # справка
-sudo tg                      # меню управления после установки
+bash tests/smoke.sh              # синтаксис + безопасные helper/CLI проверки
+bash tests/cluster_smoke.sh      # кластер и HAProxy (без root)
+bash tests/role_wizard_smoke.sh  # мастер ролей: summary, SECRET, ноды (без root)
+bash install.sh --help           # справка
+sudo tg                          # меню управления после установки
 ```
 
 `tests/smoke.sh` не выполняет установку и не меняет `apt`, `nginx`, `systemd`,

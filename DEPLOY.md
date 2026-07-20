@@ -10,6 +10,8 @@
 - **MEKO SYN FIX** (inline iptables)
 - команду **`tg`** для управления после установки
 
+Установщик **v2.9** поддерживает универсальный **мастер ролей** при интерактивной установке (пункт меню **1**).
+
 ---
 
 ## 1. Что нужно заранее
@@ -104,6 +106,7 @@ ls -la
 
 ```bash
 bash tests/smoke.sh
+bash tests/role_wizard_smoke.sh
 bash install.sh --help
 ```
 
@@ -111,6 +114,7 @@ bash install.sh --help
 
 ```text
 ALL SYNTAX OK
+ALL ROLE WIZARD SMOKE OK
 ```
 
 ---
@@ -125,10 +129,24 @@ sudo bash install.sh
 
 1. Выберите пункт **`1`** — Установка / переустановка  
 2. Если найдена старая установка — выберите **удалить и поставить с нуля** или **оставить**  
-3. Введите домен, например: `proxy.example.com`  
-4. Подтвердите установку  
-5. При запросе новой версии telemt — ответьте **`y`**  
-6. После установки скопируйте **сервер** и **секрет** для @MTProxybot  
+3. **Мастер ролей** (v2.9) — выберите роль сервера:
+
+   | # | Роль | Что будет установлено |
+   |---|------|------------------------|
+   | 1 | Одиночный прокси | telemt + nginx + MEKO (один VPS, одна ссылка) |
+   | 2 | Нода кластера | telemt + nginx + MEKO, общий SECRET с кластером |
+   | 3 | Master + балансировщик | HAProxy + управление кластером (без telemt) |
+
+4. Ответьте на вопросы мастера (домен, SECRET, ноды — в зависимости от роли)  
+5. Подтвердите сводку параметров  
+6. При запросе новой версии telemt — ответьте **`y`**  
+7. После установки скопируйте **сервер** и **секрет** для @MTProxybot (для standalone и node)
+
+**Одиночный прокси** (роль 1): домен → version picker → подтверждение.
+
+**Нода кластера** (роль 2): кластерный домен → домен/IP маски → SECRET (вручную или по SSH с master) → version picker → подтверждение.
+
+**Master + LB** (роль 3): кластерный домен (A-запись на этот сервер) → добавить ноды сейчас или позже → подтверждение.
 
 Открыть меню позже:
 
@@ -167,6 +185,28 @@ sudo bash install.sh \
 ```bash
 sudo bash install.sh --domain proxy.example.com --fresh --yes
 ```
+
+### 5.3 Кластер / мульти-прокси (CLI)
+
+Несколько telemt-нод за одним доменом и **одной** `tg://proxy`-ссылкой. HAProxy балансирует нагрузку.
+
+**Master + LB** (рекомендуется в v2.9 — один VPS для HAProxy и управления):
+
+```bash
+sudo bash install.sh --role=master-lb --cluster-domain proxy.example.com \
+  --node node1:203.0.113.10:443 --node node2:203.0.113.11:443 --yes
+```
+
+**Нода** на каждом backend-VPS:
+
+```bash
+sudo bash install.sh --role=node --domain mask1.example.com \
+  --cluster-domain proxy.example.com --cluster-secret HEX --fresh --yes
+```
+
+Legacy-роли `--role=master` и `--role=lb` сохранены для обратной совместимости.
+
+Интерактивно: меню **1)** → роль **2)** или **3)**. Управление кластером: меню **12)**.
 
 ---
 
@@ -266,6 +306,7 @@ sudo bash install.sh --keep
 
 ```bash
 bash tests/smoke.sh
+bash tests/role_wizard_smoke.sh
 ```
 
 ---
