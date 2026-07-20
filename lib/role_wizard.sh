@@ -138,4 +138,35 @@ wizard_cluster_node() {
   confirm_action "Начать установку ноды кластера?" || die "Отменено"
   run_cluster_node_install
 }
-wizard_master_lb() { die "wizard_master_lb: not implemented"; }
+prompt_cluster_nodes() {
+  local name="" ip="" port="443"
+  echo "Введите ноды (пустое имя — конец):"
+  while true; do
+    prompt_line name "Имя ноды" ""
+    [ -z "$name" ] && break
+    prompt_line ip "IP" ""
+    [ -n "$ip" ] || die "IP обязателен"
+    prompt_line port "Порт" "443"
+    cluster_add_node "$name" "$ip" "$port"
+  done
+}
+
+wizard_master_lb() {
+  export CLUSTER_ROLE=master_lb
+  DOMAIN=""
+  prompt_line CLUSTER_DOMAIN "Кластерный домен (A-запись → этот сервер)" "${CLUSTER_DOMAIN:-}"
+  CLUSTER_DOMAIN="$(require_valid_domain_name "$CLUSTER_DOMAIN")"
+  export CLUSTER_DOMAIN
+  DOMAIN="$CLUSTER_DOMAIN"
+  export DOMAIN
+  check_domain_dns "$CLUSTER_DOMAIN" || log_warn "DNS может не указывать на этот сервер"
+
+  if confirm_yes "Добавить ноды сейчас?"; then
+    cluster_init_nodes_file
+    prompt_cluster_nodes
+  fi
+
+  print_role_summary "master_lb"
+  confirm_action "Начать установку Master+LB?" || die "Отменено"
+  run_cluster_master_lb_install
+}
