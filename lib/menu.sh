@@ -27,9 +27,7 @@ menu_install() {
     pause_key_menu
     return 0
   fi
-  prepare_install_domain
-  prepare_install_options
-  run_install_flow
+  role_wizard_run
   pause_key_menu
 }
 
