@@ -52,6 +52,7 @@ DOMAIN=""; TLS_DOMAIN=""; INSTALL_IP_ONLY=0; AD_TAG=""; TELEMT_VERSION=""; MEKO_
 FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; CHECK_RKN=0; DOCTOR=0
 CLUSTER_ROLE="standalone"; CLUSTER_DOMAIN=""; CLUSTER_SECRET=""
 CLUSTER_NODES=""
+MASTER_PANEL_URL=""; NODE_NAME=""; CLUSTER_AGENT_TOKEN=""
 SUBCOMMAND=""
 
 if [ $# -gt 0 ] && [[ "$1" != --* ]]; then
@@ -89,6 +90,9 @@ while [ $# -gt 0 ]; do
     --cluster-domain) CLUSTER_DOMAIN=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --cluster-secret) CLUSTER_SECRET=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --node) CLUSTER_NODES="$CLUSTER_NODES $(require_arg_value "$1" "${2:-}")"; shift 2 ;;
+    --master-panel-url) MASTER_PANEL_URL=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
+    --node-name) NODE_NAME=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
+    --cluster-agent-token) CLUSTER_AGENT_TOKEN=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     -h|--help)
       sed -n '2,26p' "$0"
       exit 0
@@ -102,7 +106,7 @@ done
 
 export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE CHECK_RKN DOCTOR INSTALL_IP_ONLY
 [ "$CLUSTER_ROLE" = "master-lb" ] && CLUSTER_ROLE=master_lb
-export CLUSTER_ROLE CLUSTER_DOMAIN CLUSTER_SECRET CLUSTER_NODES
+export CLUSTER_ROLE CLUSTER_DOMAIN CLUSTER_SECRET CLUSTER_NODES MASTER_PANEL_URL NODE_NAME CLUSTER_AGENT_TOKEN
 [ -n "$TLS_DOMAIN" ] && export TLS_DOMAIN
 [ -n "$AD_TAG" ] && export AD_TAG
 
@@ -116,7 +120,7 @@ remote_bootstrap
 
 # shellcheck source=lib/common.sh
 source "$DEPLOY_ROOT/lib/common.sh"
-for mod in prereq dns nginx ssl ssl_renew telemt meko firewall dialog ui_highlight mask_picker version_picker rkn_check sni_check haproxy cluster panel role_wizard link backup doctor verify handoff uninstall env stats monitor install_flow cli_tools menu; do
+for mod in prereq dns nginx ssl ssl_renew telemt meko firewall dialog ui_highlight mask_picker version_picker rkn_check sni_check haproxy cluster panel cluster_agent role_wizard link backup doctor verify handoff uninstall env stats monitor install_flow cli_tools menu; do
   # shellcheck source=/dev/null
   source "$DEPLOY_ROOT/lib/${mod}.sh"
 done

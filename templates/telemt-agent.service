@@ -1,0 +1,8 @@
+[Unit]
+Description=telemt cluster metrics push agent
+After=network-online.target telemt.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/telemt-agent.sh

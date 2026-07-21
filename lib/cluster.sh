@@ -2,6 +2,8 @@
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 # shellcheck source=panel.sh
 [ -f "$(dirname "${BASH_SOURCE[0]}")/panel.sh" ] && source "$(dirname "${BASH_SOURCE[0]}")/panel.sh"
+# shellcheck source=cluster_agent.sh
+[ -f "$(dirname "${BASH_SOURCE[0]}")/cluster_agent.sh" ] && source "$(dirname "${BASH_SOURCE[0]}")/cluster_agent.sh"
 
 CLUSTER_SH_VERSION="1.0"
 CLUSTER_FILE="/etc/telemt-deploy.cluster"
@@ -321,6 +323,8 @@ run_cluster_node_install() {
   [ -n "${CLUSTER_DOMAIN:-}" ] || die "--cluster-domain обязателен для --role=node"
   [ -n "${DOMAIN:-}" ] || die "--domain обязателен для --role=node (домен маски ноды)"
 
+  [ -n "${NODE_NAME:-}" ] && export CLUSTER_NODE_NAME="$NODE_NAME"
+
   CLUSTER_ROLE=node
   cluster_save
 
@@ -331,6 +335,13 @@ run_cluster_node_install() {
 
   cluster_register_self_node
   log_info "Нода зарегистрирована в кластере ${CLUSTER_DOMAIN}"
+
+  local agent_url="${MASTER_PANEL_URL:-}" agent_name="${CLUSTER_NODE_NAME:-${NODE_NAME:-$(hostname -s)}}" agent_token="${CLUSTER_AGENT_TOKEN:-${NODE_TOKEN:-}}"
+  if [ -n "$agent_url" ] && [ -n "$agent_token" ]; then
+    agent_install "$agent_url" "$agent_name" "$agent_token"
+  else
+    log_warn "Агент метрик не настроен — задайте MASTER_PANEL_URL и CLUSTER_AGENT_TOKEN"
+  fi
 }
 
 run_cluster_master_init() {
