@@ -3,10 +3,168 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>telemt cluster</title>
+  <title>telemt cluster panel</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0f1419; --card:#1a2332; --text:#e7ecf3; --muted:#8b98a8; --ok:#3dd68c; --warn:#f5c451; --bad:#f87171; --accent:#5b9cf5; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:1rem 1.5rem; border-bottom:1px solid #243044; display:flex; justify-content:space-between; align-items:center; }
+    h1 { margin:0; font-size:1.1rem; }
+    main { padding:1.5rem; max-width:1100px; margin:0 auto; }
+    .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:1rem; margin-bottom:1.5rem; }
+    .card { background:var(--card); border-radius:10px; padding:1rem; }
+    .card .label { color:var(--muted); font-size:.85rem; }
+    .card .value { font-size:1.6rem; font-weight:600; margin-top:.25rem; }
+    table { width:100%; border-collapse:collapse; background:var(--card); border-radius:10px; overflow:hidden; }
+    th, td { padding:.65rem .8rem; text-align:left; border-bottom:1px solid #243044; }
+    th { color:var(--muted); font-size:.8rem; text-transform:uppercase; }
+    .badge { padding:.15rem .5rem; border-radius:999px; font-size:.75rem; font-weight:600; }
+    .online { background:#12352a; color:var(--ok); }
+    .stale { background:#3a2f14; color:var(--warn); }
+    .offline { background:#3a1f24; color:var(--bad); }
+    .section { margin-top:1.5rem; background:var(--card); border-radius:10px; padding:1rem; }
+    input, button { font:inherit; }
+    input { background:#0f1419; border:1px solid #334155; color:var(--text); padding:.5rem .65rem; border-radius:8px; width:min(360px,100%); }
+    button { background:var(--accent); color:#fff; border:0; padding:.55rem .9rem; border-radius:8px; cursor:pointer; }
+    button.secondary { background:#334155; }
+    #login { max-width:360px; margin:4rem auto; background:var(--card); padding:1.5rem; border-radius:12px; }
+    #login label { display:block; margin:.75rem 0 .25rem; color:var(--muted); font-size:.85rem; }
+    #err { color:var(--bad); min-height:1.2rem; margin-top:.5rem; }
+    .link { word-break:break-all; }
+    .hidden { display:none; }
+  </style>
 </head>
 <body>
-  <h1>telemt cluster panel</h1>
-  <p>Dashboard loading — use <code>tg cluster status</code> or refresh after login.</p>
+  <div id="login">
+    <h2>Вход в панель</h2>
+    <label>Логин<input id="user" autocomplete="username"></label>
+    <label>Пароль<input id="pass" type="password" autocomplete="current-password"></label>
+    <p id="err"></p>
+    <button id="btnLogin" type="button">Войти</button>
+  </div>
+  <div id="app" class="hidden">
+    <header>
+      <h1>telemt cluster</h1>
+      <span id="updated" style="color:var(--muted);font-size:.85rem"></span>
+    </header>
+    <main>
+      <div class="cards">
+        <div class="card"><div class="label">Домен</div><div class="value" id="domain" style="font-size:1rem">—</div></div>
+        <div class="card"><div class="label">People</div><div class="value" id="totalPeople">0</div></div>
+        <div class="card"><div class="label">TCP</div><div class="value" id="totalTcp">0</div></div>
+      </div>
+      <table>
+        <thead><tr><th>Нода</th><th>IP</th><th>Статус</th><th>People</th><th>TCP</th><th>telemt</th><th>HAProxy</th></tr></thead>
+        <tbody id="nodes"></tbody>
+      </table>
+      <section class="section">
+        <h3 style="margin-top:0">Единая ссылка</h3>
+        <p class="link" id="proxyLink">—</p>
+        <button class="secondary" id="btnCopy" type="button">Копировать</button>
+      </section>
+      <section class="section">
+        <h3 style="margin-top:0">Смена кластерного домена</h3>
+        <p style="color:var(--muted);font-size:.9rem">Меняется только server= в ссылке. Mask-домены нод не затрагиваются.</p>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem">
+          <input id="newDomain" placeholder="new-proxy.example.com">
+          <button id="btnMigrate" type="button">Применить</button>
+        </div>
+        <p id="migrateMsg" style="color:var(--muted);margin-top:.5rem"></p>
+      </section>
+    </main>
+  </div>
+  <script>
+    const loginEl = document.getElementById('login');
+    const appEl = document.getElementById('app');
+    const errEl = document.getElementById('err');
+    let authHeader = sessionStorage.getItem('panelAuth') || '';
+
+    function authFromForm() {
+      const u = document.getElementById('user').value.trim();
+      const p = document.getElementById('pass').value;
+      return 'Basic ' + btoa(u + ':' + p);
+    }
+
+    async function api(path, opts = {}) {
+      const res = await fetch(path, {
+        ...opts,
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json',
+          ...(opts.headers || {})
+        }
+      });
+      if (res.status === 401) throw new Error('auth');
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    function badge(status) {
+      return '<span class="badge ' + status + '">' + status + '</span>';
+    }
+
+    function render(data) {
+      document.getElementById('domain').textContent = data.cluster_domain || '—';
+      document.getElementById('totalPeople').textContent = data.totals?.people ?? 0;
+      document.getElementById('totalTcp').textContent = data.totals?.tcp ?? 0;
+      document.getElementById('proxyLink').textContent = data.proxy_link || '—';
+      document.getElementById('updated').textContent = 'обновлено ' + new Date().toLocaleTimeString();
+      const tbody = document.getElementById('nodes');
+      tbody.innerHTML = (data.nodes || []).map(function (n) {
+        return '<tr><td>' + n.name + '</td><td>' + n.ip + ':' + n.port + '</td><td>' + badge(n.status) +
+          '</td><td>' + n.people + '</td><td>' + n.tcp + '</td><td>' + (n.telemt_active ? 'on' : 'off') +
+          '</td><td>' + (n.haproxy_up ? 'up' : 'down') + '</td></tr>';
+      }).join('');
+    }
+
+    async function refresh() {
+      const data = await api('/api/v1/cluster');
+      render(data);
+    }
+
+    async function doLogin() {
+      errEl.textContent = '';
+      authHeader = authFromForm();
+      try {
+        await refresh();
+        sessionStorage.setItem('panelAuth', authHeader);
+        loginEl.classList.add('hidden');
+        appEl.classList.remove('hidden');
+        setInterval(function () { refresh().catch(function () {}); }, 5000);
+      } catch (e) {
+        authHeader = '';
+        errEl.textContent = 'Неверный логин или пароль';
+      }
+    }
+
+    document.getElementById('btnLogin').onclick = doLogin;
+    document.getElementById('btnCopy').onclick = async function () {
+      const t = document.getElementById('proxyLink').textContent;
+      if (t && t !== '—') await navigator.clipboard.writeText(t);
+    };
+    document.getElementById('btnMigrate').onclick = async function () {
+      const domain = document.getElementById('newDomain').value.trim();
+      const msg = document.getElementById('migrateMsg');
+      msg.textContent = '';
+      if (!domain) return;
+      try {
+        await api('/api/v1/domain/migrate', { method: 'POST', body: JSON.stringify({ domain: domain }) });
+        msg.textContent = 'Домен обновлён. Проверьте DNS.';
+        await refresh();
+      } catch (e) {
+        msg.textContent = 'Ошибка: ' + e.message;
+      }
+    };
+
+    if (authHeader) {
+      refresh().then(function () {
+        loginEl.classList.add('hidden');
+        appEl.classList.remove('hidden');
+        setInterval(function () {
+          refresh().catch(function () { sessionStorage.removeItem('panelAuth'); location.reload(); });
+        }, 5000);
+      }).catch(function () { authHeader = ''; sessionStorage.removeItem('panelAuth'); });
+    }
+  </script>
 </body>
 </html>

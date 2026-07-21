@@ -2,7 +2,7 @@
 
 Автоустановка **telemt** + **nginx self-mask** + **MEKO SYN FIX** на Ubuntu 22.04/24.04.
 
-Установщик **v2.9** — универсальный мастер ролей: одиночный прокси, нода кластера или master+LB.
+Установщик **v3.0** — универсальный мастер ролей: одиночный прокси, нода кластера или master+LB с **веб-панелью** кластера.
 
 ## Быстрый старт
 
@@ -40,7 +40,7 @@ sudo bash install.sh
 | 12 | Кластер / мульти-прокси |
 | 0 | Выход |
 
-При выборе **1) Установка** откроется **мастер ролей** (installer v2.9):
+При выборе **1) Установка** откроется **мастер ролей** (installer v3.0):
 
 | # | Роль | Компоненты |
 |---|------|------------|
@@ -72,6 +72,21 @@ sudo bash install.sh
 | `--meko-upgrade` | Обновить MEKO SYN FIX до версии из комплекта |
 | `--uninstall` | Удалить установленный стек |
 | `--role ROLE` | `standalone` \| `node` \| `lb` \| `master` \| `master-lb` (кластер) |
+| `--cluster-agent-token HEX` | Токен push-агента (для node) |
+| `--master-panel-url URL` | URL панели master (`https://IP:8443`) |
+| `--node-name NAME` | Имя ноды в кластере |
+
+### Панель и CLI кластера (v3.0)
+
+На **master_lb** поднимается панель на **https://&lt;IP&gt;:8443** (логин/пароль выводятся после установки).
+
+```bash
+tg cluster status
+tg cluster monitor
+tg cluster panel-credentials
+tg cluster migrate-domain NEW_DOMAIN
+```
+
 | `--cluster-domain DOMAIN` | Публичный домен единой ссылки |
 | `--cluster-secret HEX` | Секрет кластера (для node) |
 | `--node SPEC` | Backend LB: `name:ip:port` (можно несколько раз) |
@@ -82,7 +97,7 @@ sudo bash install.sh
 Несколько telemt-нод за одним доменом и **одной** `tg://proxy`-ссылкой. HAProxy (TCP passthrough) балансирует нагрузку и исключает мёртвые ноды.
 
 ```bash
-# 1. Master + LB (v2.9): HAProxy и управление кластером на одном VPS
+# 1. Master + LB (v3.0): HAProxy, панель :8443, управление кластером
 sudo bash install.sh --role=master-lb --cluster-domain proxy.example.com \
   --node node1:203.0.113.10:443 --node node2:203.0.113.11:443 --yes
 
@@ -172,6 +187,7 @@ sudo tg restore /root/telemt-backup-....tar.gz
 ```bash
 bash tests/smoke.sh              # синтаксис + безопасные helper/CLI проверки
 bash tests/cluster_smoke.sh      # кластер и HAProxy (без root)
+bash tests/panel_smoke.sh       # API панели (без root)
 bash tests/role_wizard_smoke.sh  # мастер ролей: summary, SECRET, ноды (без root)
 bash install.sh --help           # справка
 sudo tg                          # меню управления после установки

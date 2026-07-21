@@ -192,6 +192,46 @@ else
   fail "cluster_add_node ensures node token"
 fi
 
+# --- cluster domain migration (mock ssh) ---
+MIGRATE_CLUSTER_FILE="$TMP/migrate.cluster"
+MIGRATE_NODES_FILE="$TMP/migrate.nodes"
+CLUSTER_HISTORY_FILE="$TMP/migrate.history"
+CLUSTER_FILE="$MIGRATE_CLUSTER_FILE"
+CLUSTER_NODES_FILE="$MIGRATE_NODES_FILE"
+export CLUSTER_FILE CLUSTER_NODES_FILE CLUSTER_HISTORY_FILE
+cat > "$CLUSTER_FILE" <<EOF
+ROLE=master_lb
+CLUSTER_DOMAIN=old.example.com
+EOF
+echo 'node1 203.0.113.10 443' > "$CLUSTER_NODES_FILE"
+mkdir -p "$TMP/mock-etc/telemt"
+cat > "$TMP/mock-etc/telemt/telemt.toml" <<EOF
+public_host = "old.example.com"
+tls_domain = "old.example.com"
+EOF
+mkdir -p "$TMP/bin"
+cat > "$TMP/bin/ssh" <<'SSHEOF'
+#!/bin/bash
+if [ "$1" = "-o" ]; then shift 5; fi
+if [ "$1" = "bash" ] && [ "$2" = "-s" ]; then
+  domain="$3"
+  cfg="${MOCK_TELEMT_CFG:-/etc/telemt/telemt.toml}"
+  sed -i "s/^public_host = .*/public_host = \"${domain}\"/" "$cfg"
+  sed -i "s/^tls_domain = .*/tls_domain = \"${domain}\"/" "$cfg"
+fi
+exit 0
+SSHEOF
+chmod +x "$TMP/bin/ssh"
+export MOCK_TELEMT_CFG="$TMP/mock-etc/telemt/telemt.toml"
+export PATH="$TMP/bin:$PATH"
+export CLUSTER_DOMAIN=old.example.com
+export SECRET="0123456789abcdef0123456789abcdef"
+if cluster_migrate_domain "new.example.com" && grep -q 'new.example.com' "$MOCK_TELEMT_CFG"; then
+  pass "cluster_migrate_domain"
+else
+  fail "cluster_migrate_domain"
+fi
+
 if [ "$FAIL" -eq 0 ]; then
   echo "ALL CLUSTER SMOKE OK"
 else

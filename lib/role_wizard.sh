@@ -134,6 +134,14 @@ wizard_cluster_node() {
   prompt_cluster_secret
   prepare_install_options
 
+  prompt_line MASTER_PANEL_URL "URL панели master (https://IP:8443)" "${MASTER_PANEL_URL:-}"
+  if [ -n "${MASTER_PANEL_URL:-}" ]; then
+    prompt_line CLUSTER_NODE_NAME "Имя этой ноды в кластере" "${NODE_NAME:-$(hostname -s)}"
+    export CLUSTER_NODE_NAME
+    prompt_line CLUSTER_AGENT_TOKEN "Токен агента (с master)" "${CLUSTER_AGENT_TOKEN:-}"
+    export MASTER_PANEL_URL CLUSTER_AGENT_TOKEN
+  fi
+
   print_role_summary "node"
   confirm_action "Начать установку ноды кластера?" || die "Отменено"
   run_cluster_node_install

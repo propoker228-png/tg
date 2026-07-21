@@ -120,7 +120,7 @@ remote_bootstrap
 
 # shellcheck source=lib/common.sh
 source "$DEPLOY_ROOT/lib/common.sh"
-for mod in prereq dns nginx ssl ssl_renew telemt meko firewall dialog ui_highlight mask_picker version_picker rkn_check sni_check haproxy cluster panel cluster_agent role_wizard link backup doctor verify handoff uninstall env stats monitor install_flow cli_tools menu; do
+for mod in prereq dns nginx ssl ssl_renew telemt meko firewall dialog ui_highlight mask_picker version_picker rkn_check sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor install_flow cli_tools menu; do
   # shellcheck source=/dev/null
   source "$DEPLOY_ROOT/lib/${mod}.sh"
 done
@@ -156,7 +156,7 @@ validate_cli_inputs() {
 
 validate_cli_inputs
 
-INSTALLER_VERSION="2.9"
+INSTALLER_VERSION="3.0"
 
 on_err() {
   echo "[X] Сбой установки (строка ${1:-?} в ${2:-install.sh})" >&2
@@ -272,6 +272,22 @@ require_lib_bundle() {
     echo "[X] Отсутствует lib/role_wizard.sh (v1.0)" >&2
     missing=1
   fi
+  if [ "${PANEL_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/panel.sh (v1.0)" >&2
+    missing=1
+  fi
+  if [ "${CLUSTER_AGENT_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/cluster_agent.sh (v1.0)" >&2
+    missing=1
+  fi
+  if [ "${CLUSTER_MIGRATE_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/cluster_migrate.sh (v1.0)" >&2
+    missing=1
+  fi
+  if [ "${CLUSTER_PANEL_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/cluster_panel.sh (v1.0)" >&2
+    missing=1
+  fi
   if [ "$missing" -eq 1 ]; then
     echo "    PowerShell: scp ...\\lib\\*.sh root@SERVER:~/telemt-deploy/lib/" >&2
     exit 1
@@ -309,11 +325,20 @@ dispatch_subcommand() {
       backup_restore "$file" "$force"
       exit 0
       ;;
+    cluster)
+      case "${1:-}" in
+        status) cluster_cli_status; exit 0 ;;
+        monitor) cluster_cli_monitor; exit 0 ;;
+        panel-credentials) cluster_cli_panel_credentials; exit 0 ;;
+        migrate-domain) cluster_cli_migrate_domain "${2:-}"; exit $? ;;
+        *) die "tg cluster: status|monitor|panel-credentials|migrate-domain" ;;
+      esac
+      ;;
     "")
       return 0
       ;;
     *)
-      die "Неизвестная команда: $SUBCOMMAND (doctor|link|backup|restore)"
+      die "Неизвестная команда: $SUBCOMMAND (doctor|link|backup|restore|cluster)"
       ;;
   esac
 }

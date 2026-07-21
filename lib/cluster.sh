@@ -4,6 +4,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 [ -f "$(dirname "${BASH_SOURCE[0]}")/panel.sh" ] && source "$(dirname "${BASH_SOURCE[0]}")/panel.sh"
 # shellcheck source=cluster_agent.sh
 [ -f "$(dirname "${BASH_SOURCE[0]}")/cluster_agent.sh" ] && source "$(dirname "${BASH_SOURCE[0]}")/cluster_agent.sh"
+# shellcheck source=cluster_migrate.sh
+[ -f "$(dirname "${BASH_SOURCE[0]}")/cluster_migrate.sh" ] && source "$(dirname "${BASH_SOURCE[0]}")/cluster_migrate.sh"
+# shellcheck source=cluster_panel.sh
+[ -f "$(dirname "${BASH_SOURCE[0]}")/cluster_panel.sh" ] && source "$(dirname "${BASH_SOURCE[0]}")/cluster_panel.sh"
 
 CLUSTER_SH_VERSION="1.0"
 CLUSTER_FILE="/etc/telemt-deploy.cluster"
@@ -405,6 +409,9 @@ menu_cluster() {
     if [ "${CLUSTER_ROLE:-}" != "master_lb" ] || ! systemctl is-active --quiet haproxy 2>/dev/null; then
       echo "  6) Установить HAProxy (роль lb / master_lb)"
     fi
+    echo "  7) Панель / учётные данные"
+    echo "  8) Мониторинг кластера (live)"
+    echo "  9) Сменить кластерный домен"
     echo "  0) Назад"
     prompt_line c "Выбор" ""
     case "$c" in
@@ -420,6 +427,9 @@ menu_cluster() {
         prompt_line ip "IP ноды" ""
         prompt_line port "Порт" "443"
         cluster_add_node "$name" "$ip" "$port"
+        if [ "${CLUSTER_ROLE:-}" = "master_lb" ] && declare -f cluster_deploy_agent_ssh >/dev/null 2>&1; then
+          cluster_deploy_agent_ssh "$name" "$ip" || true
+        fi
         if systemctl is-active --quiet haproxy 2>/dev/null; then
           haproxy_reload
         fi
@@ -459,6 +469,20 @@ menu_cluster() {
         CLUSTER_ROLE=lb
         cluster_save
         haproxy_deploy
+        pause_key_menu
+        ;;
+      7)
+        cluster_cli_panel_credentials
+        pause_key_menu
+        ;;
+      8)
+        cluster_cli_monitor
+        ;;
+      9)
+        prompt_line CLUSTER_DOMAIN_NEW "Новый кластерный домен" "${CLUSTER_DOMAIN:-}"
+        [ -n "$CLUSTER_DOMAIN_NEW" ] || continue
+        confirm_dialog "Сменить домен на ${CLUSTER_DOMAIN_NEW}?" || continue
+        cluster_migrate_domain "$CLUSTER_DOMAIN_NEW"
         pause_key_menu
         ;;
       0) break ;;
