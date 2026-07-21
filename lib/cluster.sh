@@ -4,6 +4,37 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 CLUSTER_SH_VERSION="1.0"
 CLUSTER_FILE="/etc/telemt-deploy.cluster"
 CLUSTER_NODES_FILE="/etc/telemt-deploy.cluster.nodes"
+CLUSTER_TOKENS_FILE="/etc/telemt-deploy.cluster.tokens"
+
+cluster_tokens_file() {
+  printf '%s' "$CLUSTER_TOKENS_FILE"
+}
+
+cluster_init_tokens_file() {
+  if [ ! -f "$CLUSTER_TOKENS_FILE" ]; then
+    touch "$CLUSTER_TOKENS_FILE"
+    chmod 600 "$CLUSTER_TOKENS_FILE"
+  fi
+}
+
+cluster_ensure_node_token() {
+  local name="$1" token
+  [ -n "$name" ] || return 1
+  cluster_init_tokens_file
+  token=$(awk -v n="$name" '$1==n {print $2; exit}' "$CLUSTER_TOKENS_FILE")
+  if [ -z "$token" ]; then
+    token=$(openssl rand -hex 16)
+    echo "${name} ${token}" >> "$CLUSTER_TOKENS_FILE"
+  fi
+  printf '%s' "$token"
+}
+
+cluster_validate_node_token() {
+  local name="$1" token="$2"
+  [ -n "$name" ] && [ -n "$token" ] || return 1
+  cluster_init_tokens_file
+  awk -v n="$name" -v t="$token" '$1==n && $2==t {found=1} END{exit !found}' "$CLUSTER_TOKENS_FILE"
+}
 
 cluster_load() {
   if [ -f "$CLUSTER_FILE" ]; then
@@ -62,6 +93,7 @@ cluster_add_node() {
     sed -i "/^${name}[[:space:]]/d" "$CLUSTER_NODES_FILE"
   fi
   echo "${name} ${ip} ${port}" >> "$CLUSTER_NODES_FILE"
+  cluster_ensure_node_token "$name" >/dev/null
   log_ok "Нода добавлена: ${name} ${ip}:${port}"
 }
 

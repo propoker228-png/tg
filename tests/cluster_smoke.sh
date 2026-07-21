@@ -167,6 +167,28 @@ else
   fail "run_cluster_master_lb_install reaches haproxy with 1 node"
 fi
 
+# --- node agent tokens ---
+CLUSTER_TOKENS_FILE="$TMP/test.tokens"
+export CLUSTER_TOKENS_FILE
+t=$(cluster_ensure_node_token "node1")
+t2=$(cluster_ensure_node_token "node1")
+if [ "${#t}" -eq 32 ] && [ "$t" = "$t2" ] && cluster_validate_node_token "node1" "$t"; then
+  pass "node token ensure and validate"
+else
+  fail "node token ensure and validate"
+fi
+if ! cluster_validate_node_token "node1" "badtoken"; then
+  pass "node token rejects invalid"
+else
+  fail "node token rejects invalid"
+fi
+cluster_add_node "tokennode" "203.0.113.99" "443"
+if cluster_validate_node_token "tokennode" "$(awk '$1=="tokennode"{print $2}' "$CLUSTER_TOKENS_FILE")"; then
+  pass "cluster_add_node ensures node token"
+else
+  fail "cluster_add_node ensures node token"
+fi
+
 if [ "$FAIL" -eq 0 ]; then
   echo "ALL CLUSTER SMOKE OK"
 else
