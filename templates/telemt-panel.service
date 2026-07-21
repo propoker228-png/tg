@@ -1,0 +1,14 @@
+[Unit]
+Description=telemt cluster admin panel API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=PANEL_DEPLOY_ROOT=@DEPLOY_ROOT@
+ExecStart=/usr/bin/python3 @DEPLOY_ROOT@/lib/panel_api.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

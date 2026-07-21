@@ -1,5 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+# shellcheck source=panel.sh
+[ -f "$(dirname "${BASH_SOURCE[0]}")/panel.sh" ] && source "$(dirname "${BASH_SOURCE[0]}")/panel.sh"
 
 CLUSTER_SH_VERSION="1.0"
 CLUSTER_FILE="/etc/telemt-deploy.cluster"
@@ -351,6 +353,12 @@ run_cluster_master_lb_install() {
   cluster_init_master "${CLUSTER_DOMAIN}"
   CLUSTER_ROLE=master_lb
   cluster_save
+
+  if declare -f panel_generate_credentials >/dev/null 2>&1; then
+    panel_generate_credentials
+    panel_install
+    panel_show_access_info
+  fi
 
   if [ ! -s "$CLUSTER_NODES_FILE" ]; then
     log_warn "Ноды не добавлены — HAProxy не запускается"

@@ -47,6 +47,9 @@ node2 203.0.113.11 443
 EOF
 export LB_PORT=443
 HAPROXY_CFG="$TMP/haproxy.cfg"
+panel_generate_credentials() { :; }
+panel_install() { :; }
+panel_show_access_info() { :; }
 haproxy_build_servers_block < "$CLUSTER_NODES_FILE"
 export HAPROXY_SERVERS
 envsubst '${LB_PORT} ${HAPROXY_SERVERS}' \
