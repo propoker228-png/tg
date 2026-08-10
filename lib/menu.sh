@@ -244,6 +244,106 @@ menu_uninstall() {
   pause_key_menu
 }
 
+menu_shaping() {
+  local c="" ip="" mbit="" iface=""
+  require_installed || return 0
+  shaping_ensure_config
+  shaping_ensure_units
+
+  while true; do
+    clear
+    shaping_load_config
+    iface="$(monitor_default_iface)"
+    echo "=== Шейпинг трафика (исходящий, Mbit/s) ==="
+    echo "  Интерфейс: ${iface:-н/д}"
+    if [ "${SHAPING_ENABLED:-0}" -eq 1 ] && awk -v g="${SHAPING_GLOBAL_MBIT:-0}" 'BEGIN { exit !(g > 0) }'; then
+      echo "  Глобальный лимит: ${SHAPING_GLOBAL_MBIT} Mbit/s"
+      echo "  Статус: включён"
+    elif [ "${SHAPING_ENABLED:-0}" -eq 1 ]; then
+      echo "  Глобальный лимит: выкл (только индивидуальные override)"
+      echo "  Статус: включён"
+    else
+      echo "  Глобальный лимит: выкл"
+      echo "  Статус: выключен"
+    fi
+    echo ""
+    echo "  Активные IP:"
+    local count=0
+    while IFS= read -r ip; do
+      [ -z "$ip" ] && continue
+      echo "    ${ip}   $(shaping_format_ip_limit "$ip")"
+      count=$((count + 1))
+    done < <(shaping_collect_active_ips | sort -u)
+    [ "$count" -eq 0 ] && echo "    (нет)"
+    echo ""
+    echo "  1) Задать глобальный лимит (Mbit/s, 0 = выкл)"
+    echo "  2) Задать лимит для IP"
+    echo "  3) Снять лимит с IP (без лимита)"
+    echo "  4) Убрать индивидуальный override"
+    echo "  5) Применить правила сейчас"
+    echo "  6) Выключить шейпинг полностью"
+    echo "  0) Назад"
+    prompt_line c "Выбор" ""
+    case "$c" in
+      1)
+        prompt_line mbit "Глобальный лимит Mbit/s (0 = выкл)" "${SHAPING_GLOBAL_MBIT:-0}"
+        if shaping_set_global_limit "$mbit"; then
+          shaping_apply && log_ok "Глобальный лимит применён" || log_warn "Конфиг сохранён, tc apply не удался"
+        else
+          log_warn "Некорректное значение Mbit/s"
+        fi
+        sleep 1
+        ;;
+      2)
+        ip="$(shaping_pick_ip)" || { sleep 1; continue; }
+        prompt_line mbit "Лимит Mbit/s для ${ip}" ""
+        if shaping_validate_mbit "$mbit" && awk -v v="$mbit" 'BEGIN { exit !(v > 0) }'; then
+          shaping_load_config
+          shaping_save_config 1 "${SHAPING_GLOBAL_MBIT:-0}" "$SHAPING_OVERRIDES_JSON"
+          shaping_override_set_mbit "$ip" "$mbit"
+          shaping_apply && log_ok "Лимит ${mbit} Mbit/s для ${ip}" || log_warn "Конфиг сохранён, tc apply не удался"
+        else
+          log_warn "Введите положительное число Mbit/s"
+        fi
+        sleep 1
+        ;;
+      3)
+        ip="$(shaping_pick_ip)" || { sleep 1; continue; }
+        shaping_load_config
+        shaping_save_config 1 "${SHAPING_GLOBAL_MBIT:-0}" "$SHAPING_OVERRIDES_JSON"
+        shaping_override_set_unlimited "$ip"
+        shaping_apply && log_ok "IP ${ip} без лимита" || log_warn "Конфиг сохранён, tc apply не удался"
+        sleep 1
+        ;;
+      4)
+        ip="$(shaping_pick_ip)" || { sleep 1; continue; }
+        if shaping_has_override "$ip"; then
+          shaping_override_remove "$ip"
+          shaping_apply && log_ok "Override для ${ip} удалён" || log_warn "Конфиг сохранён, tc apply не удался"
+        else
+          log_warn "Для ${ip} нет индивидуального override"
+          sleep 1
+        fi
+        ;;
+      5)
+        if shaping_apply; then
+          log_ok "Правила tc применены"
+        else
+          log_warn "Не удалось применить правила tc"
+        fi
+        sleep 1
+        ;;
+      6)
+        shaping_disable_all
+        shaping_apply && log_ok "Шейпинг выключен" || log_warn "Конфиг обновлён, tc apply не удался"
+        sleep 1
+        ;;
+      0) break ;;
+      *) log_warn "Неверный выбор"; sleep 1 ;;
+    esac
+  done
+}
+
 main_menu() {
   local choice=""
 
@@ -263,6 +363,7 @@ main_menu() {
     echo "  10) Обновить telemt"
     echo "  11) Удалить стек"
     echo "  12) Кластер / мульти-прокси"
+    echo "  13) Шейпинг трафика"
     echo "  0)  Выход"
     echo ""
     prompt_line choice "Выбор" ""
@@ -282,6 +383,7 @@ main_menu() {
       10) menu_upgrade_telemt ;;
       11) menu_uninstall ;;
       12) menu_cluster ;;
+      13) menu_shaping ;;
       0|q|Q) break ;;
       *) log_warn "Неверный выбор"; sleep 1 ;;
     esac

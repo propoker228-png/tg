@@ -118,7 +118,7 @@ remote_bootstrap
 
 # shellcheck source=lib/common.sh
 source "$DEPLOY_ROOT/lib/common.sh"
-for mod in prereq dns nginx ssl ssl_renew telemt meko firewall dialog ui_highlight mask_picker version_picker sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor install_flow cli_tools menu; do
+for mod in prereq dns nginx ssl ssl_renew telemt meko firewall dialog ui_highlight mask_picker version_picker sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor shaping install_flow cli_tools menu; do
   # shellcheck source=/dev/null
   source "$DEPLOY_ROOT/lib/${mod}.sh"
 done
@@ -200,6 +200,10 @@ require_lib_bundle() {
   fi
   if [ "${MONITOR_SH_VERSION:-}" != "1.0" ] && [ "${MONITOR_SH_VERSION:-}" != "1.1" ] && [ "${MONITOR_SH_VERSION:-}" != "1.2" ]; then
     echo "[X] Устаревший lib/monitor.sh (нужен v1.0+) — скопируйте lib/monitor.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${SHAPING_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/shaping.sh (v1.0) — скопируйте lib/shaping.sh на сервер" >&2
     missing=1
   fi
   if [ "${DIALOG_SH_VERSION:-}" != "1.0" ]; then

@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodic telemt traffic shaping sync
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=30s
+Unit=telemt-shaping.service
+
+[Install]
+WantedBy=timers.target

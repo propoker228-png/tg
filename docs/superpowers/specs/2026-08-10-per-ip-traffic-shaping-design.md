@@ -1,7 +1,7 @@
 # telemt-deploy: per-IP egress traffic shaping (menu item 13)
 
 **Date:** 2026-08-10  
-**Status:** Approved for implementation
+**Status:** Implemented
 
 ## Goal
 

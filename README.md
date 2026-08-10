@@ -38,6 +38,7 @@ sudo bash install.sh
 | 10 | Обновить telemt |
 | 11 | Удалить стек |
 | 12 | Кластер / мульти-прокси |
+| 13 | Шейпинг трафика (лимит Mbit/s на IP, исходящий) |
 | 0 | Выход |
 
 При выборе **1) Установка** откроется **мастер ролей** (installer v3.0):
@@ -188,6 +189,7 @@ bash tests/smoke.sh              # синтаксис + безопасные hel
 bash tests/cluster_smoke.sh      # кластер и HAProxy (без root)
 bash tests/panel_smoke.sh       # API панели (без root)
 bash tests/role_wizard_smoke.sh  # мастер ролей: summary, SECRET, ноды (без root)
+bash tests/shaping_smoke.sh      # шейпинг: effective_limit, config JSON (без root)
 bash install.sh --help           # справка
 sudo tg                          # меню управления после установки
 ```

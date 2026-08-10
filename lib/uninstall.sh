@@ -8,6 +8,13 @@ uninstall_all() {
   systemctl disable telemt mtpr-synfix 2>/dev/null || true
 
   rm -f /etc/systemd/system/telemt.service /etc/systemd/system/mtpr-synfix.service
+  systemctl stop telemt-shaping.timer telemt-shaping.service 2>/dev/null || true
+  systemctl disable telemt-shaping.timer telemt-shaping.service 2>/dev/null || true
+  rm -f /etc/systemd/system/telemt-shaping.service /etc/systemd/system/telemt-shaping.timer
+  rm -f /usr/local/bin/telemt-shaping-apply.sh
+  local iface
+  iface=$(ip route | awk '/default/{print $5; exit}')
+  [ -n "$iface" ] && tc qdisc replace dev "$iface" root fq 2>/dev/null || true
   rm -f /bin/telemt
   rm -rf /etc/telemt
   userdel telemt 2>/dev/null || true

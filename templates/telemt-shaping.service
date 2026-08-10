@@ -1,0 +1,10 @@
+[Unit]
+Description=Apply telemt per-IP egress traffic shaping
+After=network-online.target telemt.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=DEPLOY_ROOT=/root/telemt-deploy
+ExecStart=/usr/local/bin/telemt-shaping-apply.sh
+RemainAfterExit=yes
