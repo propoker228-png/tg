@@ -49,19 +49,6 @@ doctor_check_dns() {
   fi
 }
 
-doctor_check_rkn() {
-  if check_rkn_ip "$(get_public_ip)" >/dev/null 2>&1; then
-    doctor_record "РКН IP" pass "не в реестре"
-  else
-    local rc=$?
-    if [ "$rc" -eq 1 ]; then
-      doctor_record "РКН IP" fail "IP в реестре заблокированных"
-    else
-      doctor_record "РКН IP" warn "не удалось проверить"
-    fi
-  fi
-}
-
 doctor_check_ssl() {
   local domain="$1" days
   if install_is_ip_only; then
@@ -125,15 +112,6 @@ run_doctor_full() {
   echo ""
 
   doctor_check_dns "$domain"
-
-  set +e
-  check_rkn_ip "$(get_public_ip)" >/dev/null 2>&1
-  case $? in
-    0) doctor_record "РКН IP" pass "не в реестре" ;;
-    1) doctor_record "РКН IP" fail "IP в реестре" ;;
-    *) doctor_record "РКН IP" warn "проверка недоступна" ;;
-  esac
-  set -e
 
   for svc in telemt nginx; do
     if systemctl is-active --quiet "$svc" 2>/dev/null; then

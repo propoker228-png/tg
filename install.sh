@@ -17,7 +17,6 @@
 #   --keep                  Оставить найденную установку как есть (без вопросов)
 #   --status                Показать статус и число подключённых (как в MEKO)
 #   --meko-upgrade          Обновить MEKO SYN FIX до версии из комплекта
-#   --check-rkn             Проверить IP сервера в реестре РКН (без меню)
 #   --doctor                Полная диагностика (tg doctor)
 #   --uninstall             Удалить установленный стек
 #   --role ROLE             standalone | node | lb | master | master_lb (кластер)
@@ -49,7 +48,7 @@ remote_bootstrap() {
 }
 
 DOMAIN=""; TLS_DOMAIN=""; INSTALL_IP_ONLY=0; AD_TAG=""; TELEMT_VERSION=""; MEKO_VERSION=""; YES=0; MEKO_FULL=0; UNINSTALL=0
-FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; CHECK_RKN=0; DOCTOR=0
+FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; DOCTOR=0
 CLUSTER_ROLE="standalone"; CLUSTER_DOMAIN=""; CLUSTER_SECRET=""
 CLUSTER_NODES=""
 MASTER_PANEL_URL=""; NODE_NAME=""; CLUSTER_AGENT_TOKEN=""
@@ -83,7 +82,6 @@ while [ $# -gt 0 ]; do
     --keep|--keep-existing) KEEP_EXISTING=1; shift ;;
     --status) STATUS=1; shift ;;
     --meko-upgrade) MEKO_UPGRADE=1; shift ;;
-    --check-rkn) CHECK_RKN=1; shift ;;
     --doctor) DOCTOR=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
     --role) CLUSTER_ROLE=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
@@ -104,7 +102,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE CHECK_RKN DOCTOR INSTALL_IP_ONLY
+export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE DOCTOR INSTALL_IP_ONLY
 [ "$CLUSTER_ROLE" = "master-lb" ] && CLUSTER_ROLE=master_lb
 export CLUSTER_ROLE CLUSTER_DOMAIN CLUSTER_SECRET CLUSTER_NODES MASTER_PANEL_URL NODE_NAME CLUSTER_AGENT_TOKEN
 [ -n "$TLS_DOMAIN" ] && export TLS_DOMAIN
@@ -120,7 +118,7 @@ remote_bootstrap
 
 # shellcheck source=lib/common.sh
 source "$DEPLOY_ROOT/lib/common.sh"
-for mod in prereq dns nginx ssl ssl_renew telemt meko firewall dialog ui_highlight mask_picker version_picker rkn_check sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor install_flow cli_tools menu; do
+for mod in prereq dns nginx ssl ssl_renew telemt meko firewall dialog ui_highlight mask_picker version_picker sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor install_flow cli_tools menu; do
   # shellcheck source=/dev/null
   source "$DEPLOY_ROOT/lib/${mod}.sh"
 done
@@ -166,7 +164,7 @@ on_err() {
 trap 'on_err $LINENO ${BASH_SOURCE[0]##*/}' ERR
 
 has_action_flags() {
-  [ "$UNINSTALL" -eq 1 ] || [ "$STATUS" -eq 1 ] || [ "$CHECK_RKN" -eq 1 ] || [ "$FRESH" -eq 1 ] || \
+  [ "$UNINSTALL" -eq 1 ] || [ "$STATUS" -eq 1 ] || [ "$FRESH" -eq 1 ] || \
     [ "$KEEP_EXISTING" -eq 1 ] || [ "$MEKO_UPGRADE" -eq 1 ] || [ -n "$DOMAIN" ] || [ -n "$TLS_DOMAIN" ] || \
     [ "${INSTALL_IP_ONLY:-0}" -eq 1 ] || \
     [ -n "$AD_TAG" ] || [ -n "$TELEMT_VERSION" ] || [ -n "$MEKO_VERSION" ] || [ "$MEKO_FULL" -eq 1 ] || \
@@ -226,10 +224,6 @@ require_lib_bundle() {
   fi
   if [ "${MASK_PICKER_SH_VERSION:-}" != "1.0" ] && [ "${MASK_PICKER_SH_VERSION:-}" != "1.1" ]; then
     echo "[X] Устаревший lib/mask_picker.sh (нужен v1.0+) — скопируйте lib/mask_picker.sh на сервер" >&2
-    missing=1
-  fi
-  if [ "${RKN_CHECK_SH_VERSION:-}" != "1.0" ]; then
-    echo "[X] Отсутствует lib/rkn_check.sh (v1.0) — скопируйте lib/rkn_check.sh на сервер" >&2
     missing=1
   fi
   if [ "${DOCTOR_SH_VERSION:-}" != "1.0" ]; then
@@ -352,11 +346,6 @@ if [ "$STATUS" -eq 1 ]; then
   [ -f "$STATE_FILE" ] && source "$STATE_FILE"
   show_proxy_status_panel
   exit 0
-fi
-
-if [ "$CHECK_RKN" -eq 1 ]; then
-  check_rkn_ip "$(get_public_ip)"
-  exit $?
 fi
 
 if [ "$DOCTOR" -eq 1 ]; then
