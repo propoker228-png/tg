@@ -233,8 +233,12 @@ require_lib_bundle() {
     echo "[X] Отсутствует lib/version_picker.sh (v1.0) — скопируйте lib/version_picker.sh на сервер" >&2
     missing=1
   fi
-  if [ "${MASK_PICKER_SH_VERSION:-}" != "1.0" ] && [ "${MASK_PICKER_SH_VERSION:-}" != "1.1" ]; then
+  if [ "${MASK_PICKER_SH_VERSION:-}" != "1.0" ] && [ "${MASK_PICKER_SH_VERSION:-}" != "1.1" ] && [ "${MASK_PICKER_SH_VERSION:-}" != "1.2" ]; then
     echo "[X] Устаревший lib/mask_picker.sh (нужен v1.0+) — скопируйте lib/mask_picker.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${PROXY_MODE_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/proxy_mode.sh (v1.0) — скопируйте lib/proxy_mode.sh на сервер" >&2
     missing=1
   fi
   if [ "${DOCTOR_SH_VERSION:-}" != "1.0" ]; then
