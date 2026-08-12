@@ -116,8 +116,10 @@ wait_mask_site_http() {
 }
 
 fetch_proxy_link() {
+  local kind
+  kind="$(proxy_mode_link_kind 2>/dev/null || echo tls)"
   curl -fsS http://127.0.0.1:9091/v1/users 2>/dev/null \
-    | python3 -c "import sys,json; print(json.load(sys.stdin)['data'][0]['links']['tls'][0])" 2>/dev/null
+    | python3 -c "import sys,json; d=json.load(sys.stdin)['data'][0]['links']; k=sys.argv[1]; print(d[k][0] if k in d and d[k] else '')" "$kind" 2>/dev/null
 }
 
 telemt_mask_domain() {
@@ -145,13 +147,22 @@ wait_proxy_link() {
 render_template() {
   local tpl="$1" dest="$2"
   TLS_DOMAIN="${TLS_DOMAIN:-${DOMAIN:-}}"
-  if install_is_ip_only; then
-    TLS_EMULATION=true
-  elif [ "${TLS_DOMAIN:-}" != "${DOMAIN:-}" ]; then
-    TLS_EMULATION=true
-  else
+  if [ "${PROXY_MODE:-tls}" = "secure" ]; then
+    MODE_TLS=false
+    MODE_SECURE=true
     TLS_EMULATION=false
+  else
+    MODE_TLS=true
+    MODE_SECURE=false
+    if install_is_ip_only; then
+      TLS_EMULATION=true
+    elif [ "${TLS_DOMAIN:-}" != "${DOMAIN:-}" ]; then
+      TLS_EMULATION=true
+    else
+      TLS_EMULATION=false
+    fi
   fi
+  export MODE_TLS MODE_SECURE
   export DOMAIN TLS_DOMAIN TLS_EMULATION SECRET AD_TAG_LINE
   export PUBLIC_HOST="${PUBLIC_HOST:-$DOMAIN}"
   export TELEMT_TLS_DOMAIN="${TELEMT_TLS_DOMAIN:-${TLS_DOMAIN:-$DOMAIN}}"
@@ -159,9 +170,9 @@ render_template() {
     export SSL_CERT_PATH SSL_KEY_PATH
     SSL_CERT_PATH="$(ssl_cert_path)"
     SSL_KEY_PATH="$(ssl_key_path)"
-    envsubst '${DOMAIN} ${PUBLIC_HOST} ${TLS_DOMAIN} ${TELEMT_TLS_DOMAIN} ${TLS_EMULATION} ${SECRET} ${AD_TAG_LINE} ${SSL_CERT_PATH} ${SSL_KEY_PATH}' < "$tpl" > "$dest"
+    envsubst '${DOMAIN} ${PUBLIC_HOST} ${TLS_DOMAIN} ${TELEMT_TLS_DOMAIN} ${MODE_TLS} ${MODE_SECURE} ${TLS_EMULATION} ${SECRET} ${AD_TAG_LINE} ${SSL_CERT_PATH} ${SSL_KEY_PATH}' < "$tpl" > "$dest"
   else
-    envsubst '${DOMAIN} ${PUBLIC_HOST} ${TLS_DOMAIN} ${TELEMT_TLS_DOMAIN} ${TLS_EMULATION} ${SECRET} ${AD_TAG_LINE}' < "$tpl" > "$dest"
+    envsubst '${DOMAIN} ${PUBLIC_HOST} ${TLS_DOMAIN} ${TELEMT_TLS_DOMAIN} ${MODE_TLS} ${MODE_SECURE} ${TLS_EMULATION} ${SECRET} ${AD_TAG_LINE}' < "$tpl" > "$dest"
   fi
 }
 
@@ -339,6 +350,7 @@ save_state() {
 DOMAIN=$DOMAIN
 TLS_DOMAIN=$TLS_DOMAIN
 INSTALL_IP_ONLY=${INSTALL_IP_ONLY:-0}
+PROXY_MODE=${PROXY_MODE:-tls}
 SECRET=$SECRET
 AD_TAG=${AD_TAG:-}
 TELEMT_VERSION=${TELEMT_VERSION:-}

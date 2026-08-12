@@ -6,8 +6,8 @@ ${AD_TAG_LINE}
 
 [general.modes]
 classic = false
-secure = false
-tls = true
+secure = ${MODE_SECURE}
+tls = ${MODE_TLS}
 
 [general.links]
 public_host = "${PUBLIC_HOST}"

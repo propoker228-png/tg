@@ -187,6 +187,7 @@ pick_meko_version() {
 
 prepare_install_options() {
   require_tty_for_picker
+  pick_proxy_mode
   echo ""
   log_info "Подготовка параметров установки"
   if install_is_ip_only; then

@@ -43,8 +43,11 @@ env_load_settings() {
   if [ -f "$STATE_FILE" ]; then
     # shellcheck disable=SC1090
     source "$STATE_FILE"
-    export DOMAIN SECRET AD_TAG TLS_DOMAIN INSTALL_IP_ONLY
+    export DOMAIN SECRET AD_TAG TLS_DOMAIN INSTALL_IP_ONLY PROXY_MODE
   fi
+
+  PROXY_MODE="${PROXY_MODE:-tls}"
+  export PROXY_MODE
 
   if [ -z "${SECRET:-}" ] && [ -f "$SECRET_FILE" ]; then
     SECRET=$(cat "$SECRET_FILE")

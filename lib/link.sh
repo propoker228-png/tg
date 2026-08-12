@@ -1,5 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+# shellcheck source=proxy_mode.sh
+source "$(dirname "${BASH_SOURCE[0]}")/proxy_mode.sh"
 # shellcheck source=ui_highlight.sh
 source "$(dirname "${BASH_SOURCE[0]}")/ui_highlight.sh"
 
@@ -16,6 +18,11 @@ build_proxy_link_fallback() {
   fi
 
   [ -n "$domain" ] && [ -n "$secret" ] || return 1
+  PROXY_MODE="${PROXY_MODE:-tls}"
+  if proxy_mode_is_secure; then
+    printf 'tg://proxy?server=%s&port=443&secret=dd%s' "$domain" "$secret"
+    return 0
+  fi
   sni="${sni:-$domain}"
   local hex_domain
   hex_domain=$(printf '%s' "$sni" | od -An -tx1 | tr -d ' \n')

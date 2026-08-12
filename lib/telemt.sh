@@ -29,6 +29,8 @@ telemt_install_binary() {
 }
 
 telemt_write_config() {
+  PROXY_MODE="${PROXY_MODE:-tls}"
+  export PROXY_MODE
   if [ -n "${AD_TAG:-}" ]; then
     require_valid_ad_tag "$AD_TAG"
     export AD_TAG_LINE="ad_tag = \"${AD_TAG}\""

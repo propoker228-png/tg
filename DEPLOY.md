@@ -180,6 +180,19 @@ sudo bash install.sh \
   --yes
 ```
 
+### Obfuscated2 (dd) — одиночный прокси
+
+Режим **secure** включает Obfuscated2 (`dd`-ссылка) вместо Fake TLS (`ee`). Полный стек (nginx self-mask, Let's Encrypt, MEKO) устанавливается как при обычной установке. Для кластера режим игнорируется — там всегда Fake TLS.
+
+```bash
+sudo bash install.sh \
+  --domain proxy.example.com \
+  --proxy-mode=secure \
+  --yes
+```
+
+После установки: `sudo tg link` — секрет в ссылке начинается с `dd`.
+
 Полная переустановка поверх существующей:
 
 ```bash

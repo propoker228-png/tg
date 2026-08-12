@@ -71,6 +71,7 @@ sudo bash install.sh
 | `--doctor` | Полная диагностика (как `tg doctor`) |
 | `--meko-upgrade` | Обновить MEKO SYN FIX до версии из комплекта |
 | `--uninstall` | Удалить установленный стек |
+| `--proxy-mode MODE` | `tls` (Fake TLS, по умолчанию) или `secure` (Obfuscated2/dd); только standalone |
 | `--role ROLE` | `standalone` \| `node` \| `lb` \| `master` \| `master-lb` (кластер) |
 | `--cluster-agent-token HEX` | Токен push-агента (для node) |
 | `--master-panel-url URL` | URL панели master (`https://IP:8443`) |
@@ -147,6 +148,12 @@ sudo bash install.sh --domain example.com --telemt-version 3.4.23 --yes
 sudo bash install.sh --domain example.com --meko-full --yes
 ```
 
+Obfuscated2 (dd) вместо Fake TLS — только одиночный прокси; nginx + MEKO ставятся как обычно:
+
+```bash
+sudo bash install.sh --domain example.com --proxy-mode=secure --yes
+```
+
 Удаление (секрет и сертификаты Let's Encrypt сохраняются):
 
 ```bash
@@ -189,6 +196,7 @@ bash tests/smoke.sh              # синтаксис + безопасные hel
 bash tests/cluster_smoke.sh      # кластер и HAProxy (без root)
 bash tests/panel_smoke.sh       # API панели (без root)
 bash tests/role_wizard_smoke.sh  # мастер ролей: summary, SECRET, ноды (без root)
+bash tests/proxy_mode_smoke.sh      # режим secure/dd: config, ссылки (без root)
 bash tests/shaping_smoke.sh      # шейпинг: effective_limit, config JSON (без root)
 bash install.sh --help           # справка
 sudo tg                          # меню управления после установки

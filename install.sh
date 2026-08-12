@@ -20,6 +20,7 @@
 #   --doctor                Полная диагностика (tg doctor)
 #   --uninstall             Удалить установленный стек
 #   --role ROLE             standalone | node | lb | master | master_lb (кластер)
+#   --proxy-mode MODE       tls (Fake TLS, default) | secure (Obfuscated2/dd); только standalone
 #   --cluster-domain DOMAIN Публичный домен ссылки (для кластера)
 #   --cluster-secret HEX    Секрет кластера (для node)
 #   --node SPEC             Backend для LB: name:ip:port (можно несколько раз)
@@ -49,6 +50,7 @@ remote_bootstrap() {
 
 DOMAIN=""; TLS_DOMAIN=""; INSTALL_IP_ONLY=0; AD_TAG=""; TELEMT_VERSION=""; MEKO_VERSION=""; YES=0; MEKO_FULL=0; UNINSTALL=0
 FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; DOCTOR=0
+PROXY_MODE="tls"; PROXY_MODE_CLI=""
 CLUSTER_ROLE="standalone"; CLUSTER_DOMAIN=""; CLUSTER_SECRET=""
 CLUSTER_NODES=""
 MASTER_PANEL_URL=""; NODE_NAME=""; CLUSTER_AGENT_TOKEN=""
@@ -85,6 +87,7 @@ while [ $# -gt 0 ]; do
     --doctor) DOCTOR=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
     --role) CLUSTER_ROLE=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
+    --proxy-mode) PROXY_MODE_CLI=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --cluster-domain) CLUSTER_DOMAIN=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --cluster-secret) CLUSTER_SECRET=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --node) CLUSTER_NODES="$CLUSTER_NODES $(require_arg_value "$1" "${2:-}")"; shift 2 ;;
@@ -118,10 +121,14 @@ remote_bootstrap
 
 # shellcheck source=lib/common.sh
 source "$DEPLOY_ROOT/lib/common.sh"
-for mod in prereq dns nginx ssl ssl_renew telemt meko firewall dialog ui_highlight mask_picker version_picker sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor shaping install_flow cli_tools menu; do
+for mod in proxy_mode prereq dns nginx ssl ssl_renew telemt meko firewall dialog ui_highlight mask_picker version_picker sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor shaping install_flow cli_tools menu; do
   # shellcheck source=/dev/null
   source "$DEPLOY_ROOT/lib/${mod}.sh"
 done
+
+[ -n "$PROXY_MODE_CLI" ] && normalize_proxy_mode "$PROXY_MODE_CLI"
+proxy_mode_force_tls_for_cluster
+export PROXY_MODE
 
 if [ "$FRESH" -eq 1 ] && [ "$KEEP_EXISTING" -eq 1 ]; then
   die "Нельзя одновременно использовать --fresh и --keep"

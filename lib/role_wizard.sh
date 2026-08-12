@@ -2,6 +2,8 @@
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 # shellcheck source=ui_highlight.sh
 source "$(dirname "${BASH_SOURCE[0]}")/ui_highlight.sh"
+# shellcheck source=proxy_mode.sh
+source "$(dirname "${BASH_SOURCE[0]}")/proxy_mode.sh"
 
 ROLE_WIZARD_SH_VERSION="1.0"
 SELECTED_INSTALL_ROLE=""
@@ -20,6 +22,7 @@ print_role_summary() {
     standalone)
       echo -e "  Роль:      ${CYAN}Одиночный прокси${NC}"
       echo -e "  Домен:     $(hl_domain "${DOMAIN:-н/д}")"
+      echo -e "  Режим:     ${CYAN}$(proxy_mode_label)${NC}"
       ;;
     node)
       echo -e "  Роль:      ${CYAN}Нода кластера${NC}"
