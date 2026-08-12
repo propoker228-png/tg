@@ -207,7 +207,7 @@ check_mask_picker_helpers() {
     TLS_DOMAIN=""
     [ "$(telemt_mask_domain)" = "proxy.example.com" ]
     cidr=$(mask_detect_scan_cidr "90.156.254.235")
-    [[ "$cidr" == *"/"* ]]
+    [ "$cidr" = "90.156.254.0/24" ]
     INSTALL_IP_ONLY=1
     DOMAIN="90.156.254.235"
     is_valid_ipv4 "$DOMAIN"

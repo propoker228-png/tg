@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-MASK_PICKER_SH_VERSION="1.1"
+MASK_PICKER_SH_VERSION="1.2"
 MASK_SCAN_PARALLEL="${MASK_SCAN_PARALLEL:-24}"
 MASK_SCAN_TIMEOUT="${MASK_SCAN_TIMEOUT:-2}"
 
@@ -44,19 +44,20 @@ mask_default_iface() {
 }
 
 mask_detect_scan_cidr() {
-  local my_ip="$1" iface ip_cidr prefix net
+  local my_ip="$1" iface ip_cidr addr net
   iface=$(mask_default_iface)
   ip_cidr=$(ip -o -4 addr show dev "$iface" 2>/dev/null | awk '{print $4; exit}')
-  if [ -z "$ip_cidr" ]; then
-    printf '%s/24' "$my_ip"
+  if [ -n "$ip_cidr" ]; then
+    addr="${ip_cidr%%/*}"
+  else
+    addr="$my_ip"
+  fi
+  net=$(python3 -c "import ipaddress; print(ipaddress.ip_network('${addr}/24', strict=False))" 2>/dev/null) || true
+  if [ -n "$net" ]; then
+    printf '%s' "$net"
     return 0
   fi
-  prefix="${ip_cidr#*/}"
-  if [ "$prefix" -lt 24 ] 2>/dev/null; then
-    net=$(python3 -c "import ipaddress; print(ipaddress.ip_network('${ip_cidr}', strict=False).supernet(new_prefix=24))" 2>/dev/null) || true
-    [ -n "$net" ] && { printf '%s' "$net"; return 0; }
-  fi
-  printf '%s' "$ip_cidr"
+  printf '%s/24' "$my_ip"
 }
 
 mask_probe_ip_cert_names() {
