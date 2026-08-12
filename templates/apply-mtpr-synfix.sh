@@ -1,6 +1,9 @@
 #!/bin/bash
-# MEKO SYN FIX inline rules — telemt-deploy bundle v3.0.1
+# MEKO SYN FIX inline rules — telemt-deploy bundle v3.0.2
 set -e
+
+MEKO_HASHLIMIT_RATE="${MEKO_HASHLIMIT_RATE:-54/minute}"
+MEKO_HASHLIMIT_BURST="${MEKO_HASHLIMIT_BURST:-1}"
 
 if [ -f /opt/mtpr-simple/port ]; then
     PORTS=$(cat /opt/mtpr-simple/port)
@@ -37,8 +40,8 @@ for PORT in "${PORT_ARRAY[@]}"; do
         -m hashlimit \
         --hashlimit-name "mtproto_${PORT}" \
         --hashlimit-mode srcip \
-        --hashlimit-upto 54/minute \
-        --hashlimit-burst 1 \
+        --hashlimit-upto "${MEKO_HASHLIMIT_RATE}" \
+        --hashlimit-burst "${MEKO_HASHLIMIT_BURST}" \
         --hashlimit-htable-expire 60000 \
         --hashlimit-htable-size 32768 \
         -j ACCEPT

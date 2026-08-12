@@ -193,6 +193,22 @@ sudo bash install.sh \
 
 После установки: `sudo tg link` — секрет в ссылке начинается с `dd`.
 
+**Медленное подключение (~15–20 с)?** Скорее всего установка по IP (`--ip-only`). Переустановите с доменом:
+
+```bash
+sudo bash install.sh --fresh \
+  --domain your.domain.com \
+  --proxy-mode=secure \
+  --yes
+```
+
+Секрет сохраняется в `/root/telemt-secret.txt`. MEKO: inline v3.0.2+, `burst=1` (не повышайте без A/B-теста).
+
+```bash
+sudo bash install.sh --meko-benchmark
+sudo bash install.sh --doctor
+```
+
 Полная переустановка поверх существующей:
 
 ```bash

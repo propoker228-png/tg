@@ -49,7 +49,7 @@ render_telemt_tpl() {
   export PROXY_MODE DOMAIN=example.com TLS_DOMAIN=mask.example.com SECRET=0123456789abcdef0123456789abcdef AD_TAG_LINE=""
   export PUBLIC_HOST="$DOMAIN" TELEMT_TLS_DOMAIN="$TLS_DOMAIN"
   if [ "$mode" = "secure" ]; then
-    export MODE_TLS=false MODE_SECURE=true TLS_EMULATION=false
+    export MODE_TLS=false MODE_SECURE=true TLS_EMULATION=true
   else
     export MODE_TLS=true MODE_SECURE=false TLS_EMULATION=false
   fi
@@ -60,7 +60,7 @@ render_telemt_tpl() {
 out=$(render_telemt_tpl secure)
 echo "$out" | grep -q 'secure = true' && pass "tpl secure true" || fail "tpl secure true"
 echo "$out" | grep -q 'tls = false' && pass "tpl tls false secure" || fail "tpl tls false secure"
-echo "$out" | grep -q 'tls_emulation = false' && pass "tpl no emulation secure" || fail "tpl no emulation secure"
+echo "$out" | grep -q 'tls_emulation = true' && pass "tpl emulation secure" || fail "tpl emulation secure"
 
 out=$(render_telemt_tpl tls)
 echo "$out" | grep -q 'tls = true' && pass "tpl tls true" || fail "tpl tls true"

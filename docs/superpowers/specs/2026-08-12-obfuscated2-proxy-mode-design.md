@@ -95,7 +95,7 @@ Single template `templates/telemt.toml.tpl`:
 | `[general.modes].tls` | `true` | `false` |
 | `[general.modes].secure` | `false` | `true` |
 | `[general.modes].classic` | `false` | `false` |
-| `[censorship].tls_emulation` | current logic | `false` |
+| `[censorship].tls_emulation` | current logic | **`true`** (обязательно для dd) |
 | `[censorship].mask` | `true` | `true` |
 | `[censorship].mask_host` / `mask_port` | `127.0.0.1:8444` | unchanged |
 | `[censorship].tls_domain` | `TLS_DOMAIN` | `TLS_DOMAIN` (nginx mask backend) |
@@ -104,7 +104,7 @@ Single template `templates/telemt.toml.tpl`:
 `render_template()` in `lib/common.sh` exports:
 
 - `MODE_TLS` / `MODE_SECURE` from `PROXY_MODE`
-- `TLS_EMULATION=false` when `PROXY_MODE=secure` (keep existing rules for ip-only / split-domain when `tls`)
+- `TLS_EMULATION=true` when `PROXY_MODE=secure` (обязательно для быстрого подключения на 443)
 
 ## Link generation
 
@@ -193,7 +193,7 @@ Sourced from `install.sh` with other `lib/*.sh` modules.
 New `tests/proxy_mode_smoke.sh` (no root, no apt):
 
 - `normalize_proxy_mode` accepts `tls`/`secure`, rejects garbage
-- Template render: secure → `secure=true`, `tls=false`, `tls_emulation=false`
+- Template render: secure → `secure=true`, `tls=false`, `tls_emulation=true`
 - Template render: tls → no regression vs current defaults
 - `build_proxy_link_fallback`: `dd` + secret only; `ee` + domain hex
 - `proxy_mode_link_kind` returns correct API key

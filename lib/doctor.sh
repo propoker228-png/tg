@@ -2,8 +2,12 @@
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 # shellcheck source=ui_highlight.sh
 source "$(dirname "${BASH_SOURCE[0]}")/ui_highlight.sh"
+# shellcheck source=proxy_mode.sh
+source "$(dirname "${BASH_SOURCE[0]}")/proxy_mode.sh"
+# shellcheck source=meko_stats.sh
+source "$(dirname "${BASH_SOURCE[0]}")/meko_stats.sh"
 
-DOCTOR_SH_VERSION="1.0"
+DOCTOR_SH_VERSION="1.1"
 
 DOCTOR_TOTAL=0
 DOCTOR_FAILED=0
@@ -100,6 +104,35 @@ doctor_print_summary() {
   return "$DOCTOR_FAILED"
 }
 
+doctor_check_meko_syn_ratio() {
+  local accept=0 reject=0 pct="" burst=""
+  if [ "$(meko_install_mode 2>/dev/null || echo none)" = "none" ]; then
+    return 0
+  fi
+  read -r accept reject <<< "$(meko_stats_syn_counts 2>/dev/null || echo "0 0")"
+  burst="$(meko_stats_hashlimit_burst)"
+  if [ "${burst:-1}" != "1" ]; then
+    doctor_record "MEKO hashlimit burst" warn "burst=${burst} (рекомендуется 1 без A/B-теста)"
+  fi
+  if pct=$(meko_stats_accept_pct 2>/dev/null); then
+    if [ "$pct" -lt 70 ]; then
+      doctor_record "MEKO SYN ratio" warn "ACCEPT ${pct}% (${accept}/${accept}+${reject})"
+    else
+      doctor_record "MEKO SYN ratio" pass "ACCEPT ${pct}%"
+    fi
+  else
+    doctor_record "MEKO SYN ratio" pass "нет SYN-счётчиков (ожидаемо без клиентов)"
+  fi
+}
+
+doctor_check_proxy_mode() {
+  if proxy_mode_is_secure && install_is_ip_only; then
+    doctor_record "Режим dd" warn "IP-only — медленное подключение (~15–20 с); используйте домен"
+  elif proxy_mode_is_secure; then
+    doctor_record "Режим dd" pass "$(proxy_mode_label), tls_emulation=true"
+  fi
+}
+
 run_doctor_full() {
   local domain="$1" link="" code sni_mode
   env_load_settings 2>/dev/null || true
@@ -154,6 +187,8 @@ run_doctor_full() {
 
   doctor_check_ssl "$domain"
   doctor_check_sni
+  doctor_check_meko_syn_ratio
+  doctor_check_proxy_mode
 
   if ssl_renew_hook_installed; then
     doctor_record "SSL auto-renew" pass "хук установлен"

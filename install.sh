@@ -17,6 +17,7 @@
 #   --keep                  Оставить найденную установку как есть (без вопросов)
 #   --status                Показать статус и число подключённых (как в MEKO)
 #   --meko-upgrade          Обновить MEKO SYN FIX до версии из комплекта
+#   --meko-benchmark        Диагностика MEKO hashlimit (ACCEPT/REJECT, burst)
 #   --doctor                Полная диагностика (tg doctor)
 #   --uninstall             Удалить установленный стек
 #   --role ROLE             standalone | node | lb | master | master_lb (кластер)
@@ -49,7 +50,7 @@ remote_bootstrap() {
 }
 
 DOMAIN=""; TLS_DOMAIN=""; INSTALL_IP_ONLY=0; AD_TAG=""; TELEMT_VERSION=""; MEKO_VERSION=""; YES=0; MEKO_FULL=0; UNINSTALL=0
-FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; DOCTOR=0
+FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; MEKO_BENCHMARK=0; DOCTOR=0
 PROXY_MODE="tls"; PROXY_MODE_CLI=""
 CLUSTER_ROLE="standalone"; CLUSTER_DOMAIN=""; CLUSTER_SECRET=""
 CLUSTER_NODES=""
@@ -84,6 +85,7 @@ while [ $# -gt 0 ]; do
     --keep|--keep-existing) KEEP_EXISTING=1; shift ;;
     --status) STATUS=1; shift ;;
     --meko-upgrade) MEKO_UPGRADE=1; shift ;;
+    --meko-benchmark) MEKO_BENCHMARK=1; shift ;;
     --doctor) DOCTOR=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
     --role) CLUSTER_ROLE=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
@@ -105,7 +107,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE DOCTOR INSTALL_IP_ONLY
+export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE MEKO_BENCHMARK DOCTOR INSTALL_IP_ONLY
 [ "$CLUSTER_ROLE" = "master-lb" ] && CLUSTER_ROLE=master_lb
 export CLUSTER_ROLE CLUSTER_DOMAIN CLUSTER_SECRET CLUSTER_NODES MASTER_PANEL_URL NODE_NAME CLUSTER_AGENT_TOKEN
 [ -n "$TLS_DOMAIN" ] && export TLS_DOMAIN
@@ -121,7 +123,7 @@ remote_bootstrap
 
 # shellcheck source=lib/common.sh
 source "$DEPLOY_ROOT/lib/common.sh"
-for mod in proxy_mode prereq dns nginx ssl ssl_renew telemt meko firewall dialog ui_highlight mask_picker version_picker sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor shaping install_flow cli_tools menu; do
+for mod in proxy_mode prereq dns nginx ssl ssl_renew telemt meko meko_stats meko_diag firewall dialog ui_highlight mask_picker version_picker sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor shaping install_flow cli_tools menu; do
   # shellcheck source=/dev/null
   source "$DEPLOY_ROOT/lib/${mod}.sh"
 done
@@ -129,6 +131,7 @@ done
 [ -n "$PROXY_MODE_CLI" ] && normalize_proxy_mode "$PROXY_MODE_CLI"
 proxy_mode_force_tls_for_cluster
 export PROXY_MODE
+proxy_mode_warn_ip_only_secure
 
 if [ "$FRESH" -eq 1 ] && [ "$KEEP_EXISTING" -eq 1 ]; then
   die "Нельзя одновременно использовать --fresh и --keep"
@@ -221,8 +224,16 @@ require_lib_bundle() {
     echo "[X] Устаревший lib/install_flow.sh (нужен v1.1+) — скопируйте lib/install_flow.sh на сервер" >&2
     missing=1
   fi
-  if [ "${MEKO_SH_VERSION:-}" != "1.2" ] && [ "${MEKO_SH_VERSION:-}" != "1.3" ]; then
+  if [ "${MEKO_SH_VERSION:-}" != "1.2" ] && [ "${MEKO_SH_VERSION:-}" != "1.3" ] && [ "${MEKO_SH_VERSION:-}" != "1.4" ]; then
     echo "[X] Устаревший lib/meko.sh (нужен v1.2+) — скопируйте lib/meko.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${MEKO_STATS_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/meko_stats.sh (v1.0) — скопируйте lib/meko_stats.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${MEKO_DIAG_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/meko_diag.sh (v1.0) — скопируйте lib/meko_diag.sh на сервер" >&2
     missing=1
   fi
   if [ "${UI_HIGHLIGHT_SH_VERSION:-}" != "1.0" ]; then
@@ -239,10 +250,6 @@ require_lib_bundle() {
   fi
   if [ "${PROXY_MODE_SH_VERSION:-}" != "1.0" ]; then
     echo "[X] Отсутствует lib/proxy_mode.sh (v1.0) — скопируйте lib/proxy_mode.sh на сервер" >&2
-    missing=1
-  fi
-  if [ "${DOCTOR_SH_VERSION:-}" != "1.0" ]; then
-    echo "[X] Отсутствует lib/doctor.sh (v1.0) — скопируйте lib/doctor.sh на сервер" >&2
     missing=1
   fi
   if [ "${LINK_SH_VERSION:-}" != "1.0" ]; then
@@ -263,6 +270,10 @@ require_lib_bundle() {
   fi
   if [ "${VERIFY_SH_VERSION:-}" != "1.1" ]; then
     echo "[X] Устаревший lib/verify.sh (нужен v1.1) — скопируйте lib/verify.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${DOCTOR_SH_VERSION:-}" != "1.0" ] && [ "${DOCTOR_SH_VERSION:-}" != "1.1" ]; then
+    echo "[X] Устаревший lib/doctor.sh (нужен v1.0+) — скопируйте lib/doctor.sh на сервер" >&2
     missing=1
   fi
   if [ "${CLI_TOOLS_SH_VERSION:-}" != "1.0" ]; then
@@ -380,6 +391,11 @@ if [ "$MEKO_UPGRADE" -eq 1 ]; then
   else
     log_ok "MEKO SYN FIX уже актуален: v$(meko_installed_version)"
   fi
+  exit 0
+fi
+
+if [ "$MEKO_BENCHMARK" -eq 1 ]; then
+  meko_diag_run_benchmark
   exit 0
 fi
 

@@ -1,8 +1,8 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-MEKO_SH_VERSION="1.3"
-MEKO_SYNFIX_VERSION="3.0.1"
+MEKO_SH_VERSION="1.4"
+MEKO_SYNFIX_VERSION="3.0.2"
 MEKO_VERSION_FILE="/opt/mtpr-simple/version"
 MEKO_APPLY_SCRIPT="/opt/mtpr-simple/apply-mtpr-synfix.sh"
 MEKO_RAW_BASE="https://raw.githubusercontent.com/Mekotofeuka/MTPROTO_FIX_By_MEKO"
@@ -88,6 +88,14 @@ meko_write_version() {
   echo "$version" > "$MEKO_VERSION_FILE"
 }
 
+meko_write_hashlimit_env() {
+  cat > /etc/default/mtpr-synfix <<'EOF'
+MEKO_HASHLIMIT_RATE=54/minute
+MEKO_HASHLIMIT_BURST=1
+EOF
+  chmod 644 /etc/default/mtpr-synfix
+}
+
 meko_install_inline_at() {
   local version="${1:-$(meko_bundled_version)}"
   require_valid_meko_version "$version"
@@ -97,6 +105,7 @@ meko_install_inline_at() {
   meko_download_inline_script "$version" /opt/mtpr-simple/apply-mtpr-synfix.sh \
     || die "Не удалось скачать MEKO inline v${version}"
   chmod +x /opt/mtpr-simple/apply-mtpr-synfix.sh
+  meko_write_hashlimit_env
   cp "$DEPLOY_ROOT/templates/mtpr-synfix.service" /etc/systemd/system/mtpr-synfix.service
   meko_write_version "$version"
   modprobe xt_u32 2>/dev/null || log_warn "xt_u32 не загружен — MEKO может не работать"

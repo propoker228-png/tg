@@ -244,6 +244,7 @@ check_cmd_fail "invalid --telemt-version value" bash "$ROOT/install.sh" --telemt
 check_cmd_fail "invalid --meko-version value" bash "$ROOT/install.sh" --meko-version latest
 
 bash "$ROOT/tests/proxy_mode_smoke.sh" || FAIL=1
+bash "$ROOT/tests/meko_diag_smoke.sh" || FAIL=1
 bash "$ROOT/tests/shaping_smoke.sh" || FAIL=1
 
 [ "$FAIL" -eq 0 ] && echo "ALL SYNTAX OK" || exit 1

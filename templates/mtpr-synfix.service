@@ -6,6 +6,7 @@ Wants=ufw.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+EnvironmentFile=-/etc/default/mtpr-synfix
 ExecStart=/opt/mtpr-simple/apply-mtpr-synfix.sh
 Restart=on-failure
 

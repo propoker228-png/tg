@@ -150,7 +150,7 @@ render_template() {
   if [ "${PROXY_MODE:-tls}" = "secure" ]; then
     MODE_TLS=false
     MODE_SECURE=true
-    TLS_EMULATION=false
+    TLS_EMULATION=true
   else
     MODE_TLS=true
     MODE_SECURE=false

@@ -153,6 +153,7 @@ menu_meko() {
     echo ""
     echo "  1) Обновить MEKO SYN FIX"
     echo "  2) Переустановить правила (inline)"
+    echo "  3) Диагностика hashlimit (benchmark)"
     echo "  0) Назад"
     prompt_line c "Выбор" ""
     case "$c" in
@@ -177,6 +178,10 @@ menu_meko() {
           continue
         fi
         confirm_action "Переустановить MEKO inline?" && meko_upgrade_inline
+        ;;
+      3|benchmark|diag)
+        meko_diag_run_benchmark
+        prompt_line c "Enter для продолжения" ""
         ;;
       0) break ;;
       *) log_warn "Неверный выбор"; sleep 1 ;;

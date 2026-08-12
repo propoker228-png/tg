@@ -70,6 +70,7 @@ sudo bash install.sh
 | `--status` | Статус и число подключённых (без меню) |
 | `--doctor` | Полная диагностика (как `tg doctor`) |
 | `--meko-upgrade` | Обновить MEKO SYN FIX до версии из комплекта |
+| `--meko-benchmark` | Диагностика MEKO hashlimit (ACCEPT/REJECT, burst) |
 | `--uninstall` | Удалить установленный стек |
 | `--proxy-mode MODE` | `tls` (Fake TLS, по умолчанию) или `secure` (Obfuscated2/dd); только standalone |
 | `--role ROLE` | `standalone` \| `node` \| `lb` \| `master` \| `master-lb` (кластер) |
@@ -154,6 +155,21 @@ Obfuscated2 (dd) вместо Fake TLS — только одиночный пр�
 sudo bash install.sh --domain example.com --proxy-mode=secure --yes
 ```
 
+**Важно для Obfuscated2:** используйте **свой домен**, не `--ip-only`. С доменом + Let's Encrypt + `tls_emulation=true` подключение ~3–4 с; по IP — ~15–20 с. Не используйте `--ip-only --proxy-mode=secure`.
+
+Миграция с IP на домен (секрет сохраняется):
+
+```bash
+sudo bash install.sh --fresh --domain your.domain.com --proxy-mode=secure --yes
+```
+
+Диагностика MEKO hashlimit:
+
+```bash
+sudo bash install.sh --meko-benchmark
+sudo bash install.sh --doctor
+```
+
 Удаление (секрет и сертификаты Let's Encrypt сохраняются):
 
 ```bash
@@ -197,6 +213,7 @@ bash tests/cluster_smoke.sh      # кластер и HAProxy (без root)
 bash tests/panel_smoke.sh       # API панели (без root)
 bash tests/role_wizard_smoke.sh  # мастер ролей: summary, SECRET, ноды (без root)
 bash tests/proxy_mode_smoke.sh      # режим secure/dd: config, ссылки (без root)
+bash tests/meko_diag_smoke.sh       # MEKO SYN ratio parse (без root)
 bash tests/shaping_smoke.sh      # шейпинг: effective_limit, config JSON (без root)
 bash install.sh --help           # справка
 sudo tg                          # меню управления после установки

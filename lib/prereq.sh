@@ -33,9 +33,19 @@ setup_telemt_user() {
   chown -R telemt:telemt /opt/telemt
 }
 
+setup_meko_sysctl() {
+  cat > /etc/sysctl.d/99-tg-meko.conf <<'EOF'
+net.ipv4.tcp_fin_timeout = 30
+net.ipv4.tcp_tw_reuse = 1
+net.netfilter.nf_conntrack_tcp_timeout_syn_recv = 30
+EOF
+  sysctl --system >/dev/null 2>&1 || true
+}
+
 prereq_install() {
   install_packages
   setup_sysctl
+  setup_meko_sysctl
   setup_telemt_user
   log_ok "Пакеты и sysctl настроены"
 }
