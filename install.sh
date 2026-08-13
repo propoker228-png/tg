@@ -150,8 +150,13 @@ validate_cli_inputs() {
     export DOMAIN TLS_DOMAIN INSTALL_IP_ONLY
   else
     if [ -n "$DOMAIN" ]; then
-      DOMAIN="$(require_valid_domain_name "$DOMAIN")"
-      export DOMAIN
+      if is_valid_ipv4 "$DOMAIN"; then
+        INSTALL_IP_ONLY=1
+        export DOMAIN INSTALL_IP_ONLY
+      else
+        DOMAIN="$(require_valid_domain_name "$DOMAIN")"
+        export DOMAIN
+      fi
     fi
     if [ -n "$TLS_DOMAIN" ]; then
       TLS_DOMAIN="$(require_valid_domain_name "$TLS_DOMAIN")"

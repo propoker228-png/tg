@@ -57,8 +57,15 @@ is_valid_ipv4() {
   return 0
 }
 
+install_sync_ip_only_from_domain() {
+  if is_valid_ipv4 "${DOMAIN:-}"; then
+    INSTALL_IP_ONLY=1
+    export INSTALL_IP_ONLY
+  fi
+}
+
 install_is_ip_only() {
-  [ "${INSTALL_IP_ONLY:-0}" -eq 1 ]
+  [ "${INSTALL_IP_ONLY:-0}" -eq 1 ] || is_valid_ipv4 "${DOMAIN:-}"
 }
 
 install_connect_label() {
@@ -226,6 +233,9 @@ is_valid_domain_name() {
 require_valid_domain_name() {
   local domain
   domain="$(normalize_domain_name "$1")"
+  if is_valid_ipv4 "$domain"; then
+    die "Указан IP-адрес вместо домена. Выберите режим «только IP» или укажите --ip-only --tls-domain <маскировка>"
+  fi
   is_valid_domain_name "$domain" || die "Некорректный домен: $(trim_whitespace "$1")"
   printf '%s' "$domain"
 }

@@ -8,6 +8,10 @@ ssl_obtain_cert() {
   local domain="$1"
   local cert="/etc/letsencrypt/live/${domain}/fullchain.pem"
 
+  if is_valid_ipv4 "$domain"; then
+    die "Let's Encrypt не выдаёт сертификаты на IP-адрес. Используйте режим «только IP» с доменом маскировки (--ip-only --tls-domain)."
+  fi
+
   if [ -f "$cert" ]; then
     log_info "Сертификат уже существует для $domain, пропускаем certbot"
     return 0

@@ -147,6 +147,13 @@ prepare_install_domain() {
   fi
 
   if [ -n "${DOMAIN:-}" ]; then
+    DOMAIN="$(trim_whitespace "$DOMAIN")"
+    if is_valid_ipv4 "$DOMAIN"; then
+      INSTALL_IP_ONLY=1
+      export DOMAIN INSTALL_IP_ONLY
+      log_ok "Обнаружен IP-адрес — режим без Let's Encrypt (self-signed SSL)"
+      return 0
+    fi
     DOMAIN="$(require_valid_domain_name "$DOMAIN")"
     export DOMAIN
     while true; do
@@ -214,6 +221,13 @@ prepare_install_domain() {
   while true; do
     prompt_line DOMAIN "Домен (A-запись → этот сервер)" ""
     [ -n "${DOMAIN:-}" ] || die "Домен обязателен"
+    DOMAIN="$(trim_whitespace "$DOMAIN")"
+    if is_valid_ipv4 "$DOMAIN"; then
+      INSTALL_IP_ONLY=1
+      export DOMAIN INSTALL_IP_ONLY
+      log_ok "Обнаружен IP-адрес — режим без Let's Encrypt (self-signed SSL)"
+      return 0
+    fi
     DOMAIN="$(require_valid_domain_name "$DOMAIN")"
     export DOMAIN
 

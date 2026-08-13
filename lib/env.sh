@@ -81,10 +81,7 @@ env_load_settings() {
     export TLS_DOMAIN
   fi
   TLS_DOMAIN="${TLS_DOMAIN:-$DOMAIN}"
-  if [ -z "${INSTALL_IP_ONLY:-}" ] && is_valid_ipv4 "${DOMAIN:-}"; then
-    INSTALL_IP_ONLY=1
-  fi
-  export INSTALL_IP_ONLY
+  install_sync_ip_only_from_domain
 
   [ -n "${AD_TAG:-}" ] && export AD_TAG
 

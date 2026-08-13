@@ -280,6 +280,27 @@ check_zapret2_templates() {
     && [ -f "$ROOT/templates/zapret2/tg-zapret2-start.sh.tpl" ]
 }
 
+check_install_ip_only_from_domain() {
+  (
+    # shellcheck source=../lib/common.sh
+    source "$ROOT/lib/common.sh"
+    DOMAIN="31.76.240.187"
+    INSTALL_IP_ONLY=0
+    install_is_ip_only
+    install_sync_ip_only_from_domain
+    [ "${INSTALL_IP_ONLY:-0}" -eq 1 ]
+  )
+}
+
+check_require_valid_domain_rejects_ip() {
+  (
+    # shellcheck source=../lib/common.sh
+    source "$ROOT/lib/common.sh"
+    require_valid_domain_name "31.76.240.187"
+  ) && return 1
+  return 0
+}
+
 check_handoff_no_secret() {
   (
     # shellcheck source=../lib/env.sh
@@ -318,6 +339,8 @@ done
 
 check_cmd_ok "backup manifest paths" check_backup_manifest_paths
 check_cmd_ok "doctor aggregate counters" check_doctor_aggregate
+check_cmd_ok "install ip-only from domain" check_install_ip_only_from_domain
+check_cmd_ok "require_valid_domain rejects ip" check_require_valid_domain_rejects_ip
 check_cmd_ok "handoff without secret" check_handoff_no_secret
 check_cmd_ok "handoff loads secret file" check_handoff_loads_secret_file
 check_cmd_ok "parse release versions" check_parse_release_versions
