@@ -4,7 +4,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 # Публичные DNS — как видят клиенты и Let's Encrypt (не локальный DNS хостинга).
 DNS_CHECK_SERVERS=(8.8.8.8 1.1.1.1)
 
-lookup_domain_a() {
+lookup_domain_a_dig() {
   local domain="$1" server ip=""
   for server in "${DNS_CHECK_SERVERS[@]}"; do
     ip=$(dig +short +time=3 +tries=1 A "$domain" @"$server" 2>/dev/null \
@@ -14,6 +14,45 @@ lookup_domain_a() {
       return 0
     fi
   done
+  return 1
+}
+
+lookup_domain_a_doh() {
+  local domain="$1" url ip=""
+  for url in \
+    "https://dns.google/resolve?name=${domain}&type=A" \
+    "https://cloudflare-dns.com/dns-query?name=${domain}&type=A"; do
+    ip=$(curl -fsS --max-time 5 -H 'accept: application/dns-json' "$url" 2>/dev/null \
+      | grep -oE '"data":"([0-9]{1,3}\.){3}[0-9]{1,3}"' \
+      | head -1 | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}') || true
+    if [ -n "$ip" ]; then
+      echo "$ip"
+      return 0
+    fi
+  done
+  return 1
+}
+
+lookup_domain_a_getent() {
+  local domain="$1" ip=""
+  ip=$(getent ahostsv4 "$domain" 2>/dev/null | awk '/STREAM/ {print $1; exit}')
+  if [ -n "$ip" ] && is_valid_ipv4 "$ip"; then
+    echo "$ip"
+    return 0
+  fi
+  return 1
+}
+
+# dig может отсутствовать до prereq_install — используем публичный DoH и getent.
+lookup_domain_a() {
+  local domain="$1"
+  if command -v dig >/dev/null 2>&1; then
+    lookup_domain_a_dig "$domain" && return 0
+  fi
+  if command -v curl >/dev/null 2>&1; then
+    lookup_domain_a_doh "$domain" && return 0
+  fi
+  lookup_domain_a_getent "$domain" && return 0
   return 1
 }
 
@@ -41,9 +80,8 @@ check_domain_dns() {
 }
 
 validate_domain_dns() {
-  local domain="$1" rc
-  check_domain_dns "$domain"
-  rc=$?
+  local domain="$1" rc=0
+  check_domain_dns "$domain" || rc=$?
   case "$rc" in
     0) return 0 ;;
     1) die "DNS: домен $domain не резолвится (нет A-записи)" ;;

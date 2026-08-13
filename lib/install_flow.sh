@@ -72,8 +72,8 @@ prepare_install_domain() {
     DOMAIN="$(require_valid_domain_name "$DOMAIN")"
     export DOMAIN
     while true; do
-      check_domain_dns "$DOMAIN"
-      dns_rc=$?
+      dns_rc=0
+      check_domain_dns "$DOMAIN" || dns_rc=$?
       case "$dns_rc" in
         0) return 0 ;;
         1)
@@ -139,8 +139,8 @@ prepare_install_domain() {
     DOMAIN="$(require_valid_domain_name "$DOMAIN")"
     export DOMAIN
 
-    check_domain_dns "$DOMAIN"
-    dns_rc=$?
+    dns_rc=0
+    check_domain_dns "$DOMAIN" || dns_rc=$?
     case "$dns_rc" in
       0) break ;;
       1)
