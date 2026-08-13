@@ -215,6 +215,17 @@ check_mask_picker_helpers() {
   )
 }
 
+check_prereq_cmd_mapping() {
+  (
+    # shellcheck source=../lib/prereq.sh
+    source "$ROOT/lib/prereq.sh"
+    [ "$(_prereq_pkg_for_cmd dig)" = "dnsutils" ]
+    [ "$(_prereq_pkg_for_cmd envsubst)" = "gettext-base" ]
+    [ "$(_prereq_pkg_for_cmd ss)" = "iproute2" ]
+    [ "$(_prereq_pkg_for_cmd tc)" = "iproute2" ]
+  )
+}
+
 check_tg_template() {
   grep -q '@DEPLOY_ROOT@' "$ROOT/templates/tg"
 }
@@ -231,6 +242,7 @@ check_cmd_ok "common helper validators" check_helpers
 check_cmd_ok "meko version helpers" check_meko_version_helpers
 check_cmd_ok "monitor network helpers" check_monitor_network_helpers
 check_cmd_ok "mask picker helpers" check_mask_picker_helpers
+check_cmd_ok "prereq command mapping" check_prereq_cmd_mapping
 check_cmd_ok "tg template present" check_tg_template
 check_cmd_ok "confirm_action cli fallback" check_confirm_action_cli_fallback
 check_cmd_ok "prompts do not leak to stdout" check_prompt_stdout_clean

@@ -317,6 +317,7 @@ require_lib_bundle() {
 require_lib_bundle
 require_root
 require_ubuntu
+ensure_base_packages
 
 dispatch_subcommand() {
   env_load_settings 2>/dev/null || true
