@@ -22,6 +22,7 @@
 #   --uninstall             Удалить установленный стек
 #   --role ROLE             standalone | node | lb | master | master_lb (кластер)
 #   --proxy-mode MODE       tls (Fake TLS, default) | secure (Obfuscated2/dd); только standalone
+#   --stub-site THEME       Сайт-заглушка: it-services, managed-ftp, global-cdn, marketplace, ...
 #   --cluster-domain DOMAIN Публичный домен ссылки (для кластера)
 #   --cluster-secret HEX    Секрет кластера (для node)
 #   --node SPEC             Backend для LB: name:ip:port (можно несколько раз)
@@ -50,7 +51,7 @@ remote_bootstrap() {
 }
 
 DOMAIN=""; TLS_DOMAIN=""; INSTALL_IP_ONLY=0; AD_TAG=""; TELEMT_VERSION=""; MEKO_VERSION=""; YES=0; MEKO_FULL=0; UNINSTALL=0
-FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; MEKO_BENCHMARK=0; DOCTOR=0
+FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; MEKO_BENCHMARK=0; DOCTOR=0; STUB_SITE=""
 PROXY_MODE="tls"; PROXY_MODE_CLI=""
 CLUSTER_ROLE="standalone"; CLUSTER_DOMAIN=""; CLUSTER_SECRET=""
 CLUSTER_NODES=""
@@ -90,6 +91,7 @@ while [ $# -gt 0 ]; do
     --uninstall) UNINSTALL=1; shift ;;
     --role) CLUSTER_ROLE=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --proxy-mode) PROXY_MODE_CLI=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
+    --stub-site) STUB_SITE=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --cluster-domain) CLUSTER_DOMAIN=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --cluster-secret) CLUSTER_SECRET=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --node) CLUSTER_NODES="$CLUSTER_NODES $(require_arg_value "$1" "${2:-}")"; shift 2 ;;
@@ -107,7 +109,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE MEKO_BENCHMARK DOCTOR INSTALL_IP_ONLY
+export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE MEKO_BENCHMARK DOCTOR INSTALL_IP_ONLY STUB_SITE
 [ "$CLUSTER_ROLE" = "master-lb" ] && CLUSTER_ROLE=master_lb
 export CLUSTER_ROLE CLUSTER_DOMAIN CLUSTER_SECRET CLUSTER_NODES MASTER_PANEL_URL NODE_NAME CLUSTER_AGENT_TOKEN
 [ -n "$TLS_DOMAIN" ] && export TLS_DOMAIN
@@ -123,7 +125,7 @@ remote_bootstrap
 
 # shellcheck source=lib/common.sh
 source "$DEPLOY_ROOT/lib/common.sh"
-for mod in proxy_mode prereq dns nginx ssl ssl_renew telemt meko meko_stats meko_diag firewall dialog ui_highlight mask_picker version_picker sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor shaping install_flow cli_tools menu; do
+for mod in proxy_mode prereq stub_site dns nginx ssl ssl_renew telemt meko meko_stats meko_diag firewall dialog ui_highlight mask_picker version_picker sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor shaping install_flow cli_tools menu; do
   # shellcheck source=/dev/null
   source "$DEPLOY_ROOT/lib/${mod}.sh"
 done
@@ -156,6 +158,10 @@ validate_cli_inputs() {
   [ -z "$AD_TAG" ] || require_valid_ad_tag "$AD_TAG"
   [ -z "$TELEMT_VERSION" ] || require_valid_telemt_version "$TELEMT_VERSION"
   [ -z "$MEKO_VERSION" ] || require_valid_meko_version "$MEKO_VERSION"
+  if [ -n "$STUB_SITE" ]; then
+    STUB_SITE=$(stub_site_resolve "$STUB_SITE") || die "Неизвестный --stub-site: $STUB_SITE"
+    export STUB_SITE
+  fi
   if [ -n "$CLUSTER_DOMAIN" ]; then
     CLUSTER_DOMAIN="$(require_valid_domain_name "$CLUSTER_DOMAIN")"
     export CLUSTER_DOMAIN
@@ -250,6 +256,10 @@ require_lib_bundle() {
   fi
   if [ "${PROXY_MODE_SH_VERSION:-}" != "1.0" ]; then
     echo "[X] Отсутствует lib/proxy_mode.sh (v1.0) — скопируйте lib/proxy_mode.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${STUB_SITE_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/stub_site.sh (v1.0) — скопируйте lib/stub_site.sh на сервер" >&2
     missing=1
   fi
   if [ "${LINK_SH_VERSION:-}" != "1.0" ]; then

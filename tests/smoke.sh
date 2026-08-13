@@ -104,6 +104,7 @@ check_install_summary_render() {
     # shellcheck source=../lib/ui_highlight.sh
     source "$ROOT/lib/ui_highlight.sh"
     DOMAIN="example.com"
+    STUB_SITE="global-cdn"
     TELEMT_VERSION="3.4.24"
     MEKO_VERSION="3.0.1"
     MEKO_FULL=0
@@ -112,6 +113,7 @@ check_install_summary_render() {
     [[ "$out" == *"example.com"* ]]
     [[ "$out" == *"3.4.24"* ]]
     [[ "$out" == *"3.0.1"* ]]
+    [[ "$out" == *"Global CDN"* ]]
   )
 }
 
@@ -227,9 +229,23 @@ check_prereq_cmd_mapping() {
 }
 
 check_stub_site_template() {
-  [ -f "$ROOT/templates/site/index.html" ] \
-    && [ -f "$ROOT/templates/site/services.html" ] \
-    && [ -f "$ROOT/templates/site/assets/style.css" ]
+  local id
+  for id in it-services managed-ftp global-cdn marketplace image-hosting auto-parts cloud-storage saas-analytics logistics; do
+    [ -f "$ROOT/templates/sites/$id/index.html" ] \
+      && [ -f "$ROOT/templates/sites/$id/contact.html" ] \
+      && [ -f "$ROOT/templates/sites/$id/assets/style.css" ] || return 1
+  done
+}
+
+check_stub_site_resolver() {
+  (
+    # shellcheck source=../lib/stub_site.sh
+    source "$ROOT/lib/stub_site.sh"
+    [ "$(stub_site_resolve 3)" = "global-cdn" ]
+    [ "$(stub_site_resolve marketplace)" = "marketplace" ]
+    [ "$(stub_site_resolve auto-parts)" = "auto-parts" ]
+    ! stub_site_resolve unknown-theme
+  )
 }
 
 check_tg_template() {
@@ -249,7 +265,8 @@ check_cmd_ok "meko version helpers" check_meko_version_helpers
 check_cmd_ok "monitor network helpers" check_monitor_network_helpers
 check_cmd_ok "mask picker helpers" check_mask_picker_helpers
 check_cmd_ok "prereq command mapping" check_prereq_cmd_mapping
-check_cmd_ok "stub site template present" check_stub_site_template
+check_cmd_ok "stub site templates present" check_stub_site_template
+check_cmd_ok "stub site resolver" check_stub_site_resolver
 check_cmd_ok "tg template present" check_tg_template
 check_cmd_ok "confirm_action cli fallback" check_confirm_action_cli_fallback
 check_cmd_ok "prompts do not leak to stdout" check_prompt_stdout_clean

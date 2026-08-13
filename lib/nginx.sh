@@ -1,21 +1,10 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+# shellcheck source=stub_site.sh
+source "$(dirname "${BASH_SOURCE[0]}")/stub_site.sh"
 
 nginx_deploy_stub_site() {
-  local dest="/var/www/html" src="$DEPLOY_ROOT/templates/site" item base
-  mkdir -p "$dest/.well-known/acme-challenge"
-  if [ -d "$src" ]; then
-    for item in "$src"/*; do
-      [ -e "$item" ] || continue
-      base=$(basename "$item")
-      rm -rf "$dest/$base"
-      cp -a "$item" "$dest/"
-    done
-    log_ok "Сайт-заглушка IT-сервисов развёрнут (Nexora Global IT)"
-  else
-    cp "$DEPLOY_ROOT/templates/index.html" "$dest/index.html"
-    log_ok "Сайт-заглушка развёрнут"
-  fi
+  deploy_stub_site
 }
 
 nginx_install_temp() {
