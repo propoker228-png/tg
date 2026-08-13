@@ -226,6 +226,12 @@ check_prereq_cmd_mapping() {
   )
 }
 
+check_stub_site_template() {
+  [ -f "$ROOT/templates/site/index.html" ] \
+    && [ -f "$ROOT/templates/site/services.html" ] \
+    && [ -f "$ROOT/templates/site/assets/style.css" ]
+}
+
 check_tg_template() {
   grep -q '@DEPLOY_ROOT@' "$ROOT/templates/tg"
 }
@@ -243,6 +249,7 @@ check_cmd_ok "meko version helpers" check_meko_version_helpers
 check_cmd_ok "monitor network helpers" check_monitor_network_helpers
 check_cmd_ok "mask picker helpers" check_mask_picker_helpers
 check_cmd_ok "prereq command mapping" check_prereq_cmd_mapping
+check_cmd_ok "stub site template present" check_stub_site_template
 check_cmd_ok "tg template present" check_tg_template
 check_cmd_ok "confirm_action cli fallback" check_confirm_action_cli_fallback
 check_cmd_ok "prompts do not leak to stdout" check_prompt_stdout_clean
