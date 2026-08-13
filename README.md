@@ -32,7 +32,7 @@ sudo bash install.sh
 | 4 | Сервисы (restart, логи) |
 | 5 | Настройки прокси (ad_tag) |
 | 6 | SSL |
-| 7 | MEKO SYN FIX |
+| 7 | SYN-фикс / обход DPI (MEKO или Zapret2) |
 | 8 | Firewall |
 | 9 | Проверки (быстрая / doctor) |
 | 10 | Обновить telemt |
@@ -71,6 +71,7 @@ sudo bash install.sh
 | `--doctor` | Полная диагностика (как `tg doctor`) |
 | `--meko-upgrade` | Обновить MEKO SYN FIX до версии из комплекта |
 | `--meko-benchmark` | Диагностика MEKO hashlimit (ACCEPT/REJECT, burst) |
+| `--syn-fix MODE` | `meko` (по умолчанию), `zapret2` (обход DPI, как в MTProxyL) или `none` |
 | `--uninstall` | Удалить установленный стек |
 | `--proxy-mode MODE` | `tls` (Fake TLS, по умолчанию) или `secure` (Obfuscated2/dd); только standalone |
 | `--role ROLE` | `standalone` \| `node` \| `lb` \| `master` \| `master-lb` (кластер) |

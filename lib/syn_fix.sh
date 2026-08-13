@@ -3,7 +3,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 # shellcheck source=zapret2.sh
 source "$(dirname "${BASH_SOURCE[0]}")/zapret2.sh"
 
-SYN_FIX_SH_VERSION="1.0"
+SYN_FIX_SH_VERSION="1.1"
 SYN_FIX_MODE="${SYN_FIX_MODE:-meko}"
 
 syn_fix_label() {
@@ -67,6 +67,7 @@ syn_fix_remove_others() {
 }
 
 pick_syn_fix_mode() {
+  local force_interactive="${1:-0}"
   local choice="" resolved=""
   if [ -n "${SYN_FIX_MODE:-}" ] && [ "${SYN_FIX_MODE_CLI_SET:-0}" -eq 1 ]; then
     resolved=$(syn_fix_resolve "$SYN_FIX_MODE") || die "Неизвестный SYN-фикс: $SYN_FIX_MODE"
@@ -75,7 +76,7 @@ pick_syn_fix_mode() {
     log_ok "SYN-фикс: $(syn_fix_label)"
     return 0
   fi
-  if [ -n "${SYN_FIX_MODE:-}" ] && is_valid_syn_fix_mode "$SYN_FIX_MODE"; then
+  if [ "$force_interactive" != "1" ] && [ -n "${SYN_FIX_MODE:-}" ] && is_valid_syn_fix_mode "$SYN_FIX_MODE"; then
     export SYN_FIX_MODE
     return 0
   fi
@@ -88,7 +89,7 @@ pick_syn_fix_mode() {
   echo ""
   echo -e "${BOLD}=== SYN-фикс / обход DPI ===${NC}"
   echo "  1) MEKO SYN FIX — hashlimit (iptables, по умолчанию)"
-  echo "  2) Zapret2 MTProto fix — disorder/badsum (nftables + nfqws2)"
+  echo "  2) Zapret2 MTProto fix — disorder/badsum (как в MTProxyL)"
   echo "  3) Без SYN-фикса"
   while true; do
     prompt_line choice "Выбор [1-3]" "1"
@@ -98,6 +99,29 @@ pick_syn_fix_mode() {
   SYN_FIX_MODE="$resolved"
   export SYN_FIX_MODE
   log_ok "SYN-фикс: $(syn_fix_label)"
+}
+
+syn_fix_prompt_and_apply() {
+  local target="$1" resolved="" prev=""
+  resolved=$(syn_fix_resolve "$target") || die "Неизвестный режим SYN-фикса: $target"
+  prev="${SYN_FIX_MODE:-meko}"
+  if [ "$prev" = "$resolved" ]; then
+    if confirm_action "Переустановить $(syn_fix_label "$resolved")?"; then
+      syn_fix_install && save_state
+    fi
+    return 0
+  fi
+  SYN_FIX_MODE="$resolved"
+  export SYN_FIX_MODE
+  if confirm_action "Переключить на $(syn_fix_label)? Текущий фикс будет заменён."; then
+    syn_fix_install && save_state
+  else
+    if declare -f env_load_settings >/dev/null 2>&1; then
+      env_load_settings 2>/dev/null || true
+    fi
+    SYN_FIX_MODE="${SYN_FIX_MODE:-$prev}"
+    export SYN_FIX_MODE
+  fi
 }
 
 syn_fix_install() {

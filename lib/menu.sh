@@ -160,6 +160,9 @@ menu_syn_fix() {
         echo "  1) Обновить MEKO SYN FIX"
         echo "  2) Переустановить правила (inline)"
         echo "  3) Диагностика hashlimit (benchmark)"
+        echo ""
+        echo "  --- Обход DPI (Zapret2, как в MTProxyL) ---"
+        echo "  8) Переключить на Zapret2 MTProto fix"
         ;;
       zapret2)
         echo "  Служба: $(zapret2_status_label)"
@@ -167,14 +170,19 @@ menu_syn_fix() {
         echo ""
         echo "  1) Перезапустить tg-zapret2"
         echo "  2) Переустановить Zapret2"
+        echo ""
+        echo "  --- Альтернатива ---"
+        echo "  8) Переключить на MEKO SYN FIX (hashlimit)"
         ;;
       none)
         echo "  SYN-фикс не установлен."
         echo ""
-        echo "  1) Установить SYN-фикс"
+        echo "  1) Выбрать режим (список)"
+        echo "  2) Zapret2 MTProto fix — обход DPI (как в MTProxyL)"
+        echo "  3) MEKO SYN FIX — hashlimit"
         ;;
     esac
-    echo "  9) Сменить режим SYN-фикса"
+    echo "  9) Сменить режим SYN-фикса (MEKO / Zapret2 / выкл)"
     echo "  0) Назад"
     prompt_line c "Выбор" ""
     case "$c" in
@@ -200,7 +208,7 @@ menu_syn_fix() {
               && log_ok "tg-zapret2 перезапущен"
             ;;
           none)
-            pick_syn_fix_mode
+            pick_syn_fix_mode 1
             confirm_action "Установить $(syn_fix_label)?" && syn_fix_install && save_state
             ;;
         esac
@@ -218,15 +226,31 @@ menu_syn_fix() {
           zapret2)
             confirm_action "Переустановить Zapret2?" && syn_fix_install && save_state
             ;;
+          none)
+            syn_fix_prompt_and_apply zapret2
+            ;;
         esac
         ;;
       3|benchmark|diag)
-        syn_fix_is_meko || { log_warn "Доступно только для MEKO"; sleep 2; continue; }
-        meko_diag_run_benchmark
-        prompt_line c "Enter для продолжения" ""
+        case "${SYN_FIX_MODE:-meko}" in
+          none)
+            syn_fix_prompt_and_apply meko
+            ;;
+          *)
+            syn_fix_is_meko || { log_warn "Доступно только для MEKO"; sleep 2; continue; }
+            meko_diag_run_benchmark
+            prompt_line c "Enter для продолжения" ""
+            ;;
+        esac
+        ;;
+      8|zapret2|zapret)
+        case "${SYN_FIX_MODE:-meko}" in
+          zapret2) syn_fix_prompt_and_apply meko ;;
+          *) syn_fix_prompt_and_apply zapret2 ;;
+        esac
         ;;
       9)
-        pick_syn_fix_mode
+        pick_syn_fix_mode 1
         confirm_action "Применить $(syn_fix_label)? Текущий фикс будет заменён." \
           && syn_fix_install && save_state
         ;;
