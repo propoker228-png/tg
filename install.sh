@@ -22,6 +22,7 @@
 #   --uninstall             Удалить установленный стек
 #   --role ROLE             standalone | node | lb | master | master_lb (кластер)
 #   --proxy-mode MODE       tls (Fake TLS, default) | secure (Obfuscated2/dd); только standalone
+#   --syn-fix MODE          meko (default) | zapret2 | none — SYN-фикс / обход DPI
 #   --stub-site THEME       Сайт-заглушка: it-services, managed-ftp, global-cdn, marketplace, ...
 #   --cluster-domain DOMAIN Публичный домен ссылки (для кластера)
 #   --cluster-secret HEX    Секрет кластера (для node)
@@ -51,7 +52,8 @@ remote_bootstrap() {
 }
 
 DOMAIN=""; TLS_DOMAIN=""; INSTALL_IP_ONLY=0; AD_TAG=""; TELEMT_VERSION=""; MEKO_VERSION=""; YES=0; MEKO_FULL=0; UNINSTALL=0
-FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; MEKO_BENCHMARK=0; DOCTOR=0; STUB_SITE=""
+FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; MEKO_BENCHMARK=0; DOCTOR=0; STUB_SITE=""; SYN_FIX_MODE=""
+SYN_FIX_CLI_SET=0
 PROXY_MODE="tls"; PROXY_MODE_CLI=""
 CLUSTER_ROLE="standalone"; CLUSTER_DOMAIN=""; CLUSTER_SECRET=""
 CLUSTER_NODES=""
@@ -91,6 +93,7 @@ while [ $# -gt 0 ]; do
     --uninstall) UNINSTALL=1; shift ;;
     --role) CLUSTER_ROLE=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --proxy-mode) PROXY_MODE_CLI=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
+    --syn-fix) SYN_FIX_MODE=$(require_arg_value "$1" "${2:-}"); SYN_FIX_CLI_SET=1; shift 2 ;;
     --stub-site) STUB_SITE=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --cluster-domain) CLUSTER_DOMAIN=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --cluster-secret) CLUSTER_SECRET=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
@@ -109,7 +112,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE MEKO_BENCHMARK DOCTOR INSTALL_IP_ONLY STUB_SITE
+export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE MEKO_BENCHMARK DOCTOR INSTALL_IP_ONLY STUB_SITE SYN_FIX_MODE SYN_FIX_CLI_SET
 [ "$CLUSTER_ROLE" = "master-lb" ] && CLUSTER_ROLE=master_lb
 export CLUSTER_ROLE CLUSTER_DOMAIN CLUSTER_SECRET CLUSTER_NODES MASTER_PANEL_URL NODE_NAME CLUSTER_AGENT_TOKEN
 [ -n "$TLS_DOMAIN" ] && export TLS_DOMAIN
@@ -125,7 +128,7 @@ remote_bootstrap
 
 # shellcheck source=lib/common.sh
 source "$DEPLOY_ROOT/lib/common.sh"
-for mod in proxy_mode prereq stub_site dns nginx ssl ssl_renew telemt meko meko_stats meko_diag firewall dialog ui_highlight mask_picker version_picker sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor shaping install_flow cli_tools menu; do
+for mod in proxy_mode prereq stub_site syn_fix zapret2 dns nginx ssl ssl_renew telemt meko meko_stats meko_diag firewall dialog ui_highlight mask_picker version_picker sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor shaping install_flow cli_tools menu; do
   # shellcheck source=/dev/null
   source "$DEPLOY_ROOT/lib/${mod}.sh"
 done
@@ -161,6 +164,10 @@ validate_cli_inputs() {
   if [ -n "$STUB_SITE" ]; then
     STUB_SITE=$(stub_site_resolve "$STUB_SITE") || die "Неизвестный --stub-site: $STUB_SITE"
     export STUB_SITE
+  fi
+  if [ -n "$SYN_FIX_MODE" ]; then
+    SYN_FIX_MODE=$(syn_fix_resolve "$SYN_FIX_MODE") || die "Неизвестный --syn-fix: $SYN_FIX_MODE (meko|zapret2|none)"
+    export SYN_FIX_MODE
   fi
   if [ -n "$CLUSTER_DOMAIN" ]; then
     CLUSTER_DOMAIN="$(require_valid_domain_name "$CLUSTER_DOMAIN")"
@@ -260,6 +267,14 @@ require_lib_bundle() {
   fi
   if [ "${STUB_SITE_SH_VERSION:-}" != "1.0" ]; then
     echo "[X] Отсутствует lib/stub_site.sh (v1.0) — скопируйте lib/stub_site.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${SYN_FIX_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/syn_fix.sh (v1.0) — скопируйте lib/syn_fix.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${ZAPRET2_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/zapret2.sh (v1.0) — скопируйте lib/zapret2.sh на сервер" >&2
     missing=1
   fi
   if [ "${LINK_SH_VERSION:-}" != "1.0" ]; then

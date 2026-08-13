@@ -108,6 +108,7 @@ check_install_summary_render() {
     TELEMT_VERSION="3.4.24"
     MEKO_VERSION="3.0.1"
     MEKO_FULL=0
+    SYN_FIX_MODE="meko"
     TELEMT_VERSION_HINT="★ latest"
     out=$(print_install_summary)
     [[ "$out" == *"example.com"* ]]
@@ -248,6 +249,23 @@ check_stub_site_resolver() {
   )
 }
 
+check_syn_fix_resolver() {
+  (
+    # shellcheck source=../lib/syn_fix.sh
+    source "$ROOT/lib/syn_fix.sh"
+    [ "$(syn_fix_resolve 1)" = "meko" ]
+    [ "$(syn_fix_resolve zapret2)" = "zapret2" ]
+    [ "$(syn_fix_resolve none)" = "none" ]
+    ! syn_fix_resolve unknown-mode
+  )
+}
+
+check_zapret2_templates() {
+  [ -f "$ROOT/templates/zapret2/mtproto.lua" ] \
+    && [ -f "$ROOT/templates/zapret2/tg-zapret2.service" ] \
+    && [ -f "$ROOT/templates/zapret2/tg-zapret2-start.sh.tpl" ]
+}
+
 check_tg_template() {
   grep -q '@DEPLOY_ROOT@' "$ROOT/templates/tg"
 }
@@ -267,6 +285,8 @@ check_cmd_ok "mask picker helpers" check_mask_picker_helpers
 check_cmd_ok "prereq command mapping" check_prereq_cmd_mapping
 check_cmd_ok "stub site templates present" check_stub_site_template
 check_cmd_ok "stub site resolver" check_stub_site_resolver
+check_cmd_ok "syn fix resolver" check_syn_fix_resolver
+check_cmd_ok "zapret2 templates present" check_zapret2_templates
 check_cmd_ok "tg template present" check_tg_template
 check_cmd_ok "confirm_action cli fallback" check_confirm_action_cli_fallback
 check_cmd_ok "prompts do not leak to stdout" check_prompt_stdout_clean
@@ -278,6 +298,7 @@ check_cmd_fail "missing --ad-tag value" bash "$ROOT/install.sh" --ad-tag
 check_cmd_fail "invalid --ad-tag value" bash "$ROOT/install.sh" --ad-tag not-a-tag
 check_cmd_fail "invalid --telemt-version value" bash "$ROOT/install.sh" --telemt-version latest
 check_cmd_fail "invalid --meko-version value" bash "$ROOT/install.sh" --meko-version latest
+check_cmd_fail "invalid --syn-fix value" bash "$ROOT/install.sh" --syn-fix bogus
 
 bash "$ROOT/tests/proxy_mode_smoke.sh" || FAIL=1
 bash "$ROOT/tests/meko_diag_smoke.sh" || FAIL=1

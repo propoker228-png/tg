@@ -1,5 +1,9 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+# shellcheck source=zapret2.sh
+source "$(dirname "${BASH_SOURCE[0]}")/zapret2.sh"
+# shellcheck source=syn_fix.sh
+source "$(dirname "${BASH_SOURCE[0]}")/syn_fix.sh"
 
 STATS_SH_VERSION="2.4.0"
 TELEMT_API_URL="${TELEMT_API_URL:-http://127.0.0.1:9091}"
@@ -37,6 +41,14 @@ _service_status_label() {
   systemctl is-active --quiet "$1" 2>/dev/null && echo OK || echo FAIL
 }
 
+_syn_fix_status_label() {
+  case "${SYN_FIX_MODE:-meko}" in
+    zapret2) zapret2_service_active && echo OK || echo FAIL ;;
+    meko) systemctl is-active --quiet mtpr-synfix 2>/dev/null && echo OK || echo FAIL ;;
+    *) echo "—" ;;
+  esac
+}
+
 fetch_active_ips_list() {
   local json
   json=$(curl -fsS --max-time 2 --connect-timeout 1 \
@@ -66,11 +78,13 @@ render_menu_header() {
     echo "  домен: не задан"
   fi
   echo "  telemt: ${telemt_ver}"
-  if [ "$(meko_install_mode 2>/dev/null || echo none)" = "inline" ]; then
+  if syn_fix_is_meko && [ "$(meko_install_mode 2>/dev/null || echo none)" = "inline" ]; then
     echo "  meko syn fix: v$(meko_installed_version 2>/dev/null || echo н/д)"
+  elif syn_fix_is_zapret2; then
+    echo "  zapret2: $(zapret2_status_label)"
   fi
   echo -e "  подключено: ${YELLOW}${people}${NC} человек | TCP: ${conns}"
-  echo "  telemt: $(_service_status_label telemt)  nginx: $(_service_status_label nginx)  mtpr-synfix: $(_service_status_label mtpr-synfix)"
+  echo "  telemt: $(_service_status_label telemt)  nginx: $(_service_status_label nginx)  syn-fix: $(_syn_fix_status_label)"
   echo "=============================================="
 }
 

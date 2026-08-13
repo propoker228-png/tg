@@ -1,5 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+# shellcheck source=zapret2.sh
+source "$(dirname "${BASH_SOURCE[0]}")/zapret2.sh"
 
 VERIFY_SH_VERSION="1.1"
 
@@ -17,10 +19,18 @@ run_doctor_quick() {
     systemctl is-active --quiet "$svc" || { log_err "$svc не active"; fail=1; }
   done
 
-  if [ "$(meko_install_mode 2>/dev/null || echo none)" = "inline" ]; then
-    systemctl is-active --quiet mtpr-synfix || { log_err "mtpr-synfix не active"; fail=1; }
-    iptables -L MTPR_SYNFIX -n 2>/dev/null | grep -q 443 || { log_err "MTPR_SYNFIX нет правил"; fail=1; }
-  fi
+  case "${SYN_FIX_MODE:-meko}" in
+    meko)
+      if [ "$(meko_install_mode 2>/dev/null || echo none)" = "inline" ]; then
+        systemctl is-active --quiet mtpr-synfix || { log_err "mtpr-synfix не active"; fail=1; }
+        iptables -L MTPR_SYNFIX -n 2>/dev/null | grep -q 443 || { log_err "MTPR_SYNFIX нет правил"; fail=1; }
+      fi
+      ;;
+    zapret2)
+      zapret2_service_active || { log_err "tg-zapret2 не active"; fail=1; }
+      nft list table ip "$ZAPRET2_NFT_TABLE" >/dev/null 2>&1 || { log_err "NFT таблица $ZAPRET2_NFT_TABLE отсутствует"; fail=1; }
+      ;;
+  esac
 
   if wait_telemt_port_443 30; then
     log_ok "telemt слушает порт 443"

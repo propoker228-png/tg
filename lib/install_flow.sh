@@ -34,7 +34,7 @@ run_install_flow() {
     nginx_install_production
   fi
   telemt_install
-  meko_install
+  syn_fix_install
   firewall_setup
   verify_install "$DOMAIN" || log_warn "Проверка выявила проблемы, продолжаем handoff"
 
@@ -48,7 +48,7 @@ run_install_flow() {
 
   save_state
   install_tg_command
-  meko_upgrade_if_needed
+  syn_fix_upgrade_if_needed
   show_proxy_online_stats
   log_ok "Установка завершена"
   log_info "Меню управления: tg"

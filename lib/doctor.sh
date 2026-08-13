@@ -6,6 +6,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/ui_highlight.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/proxy_mode.sh"
 # shellcheck source=meko_stats.sh
 source "$(dirname "${BASH_SOURCE[0]}")/meko_stats.sh"
+# shellcheck source=zapret2.sh
+source "$(dirname "${BASH_SOURCE[0]}")/zapret2.sh"
+# shellcheck source=syn_fix.sh
+source "$(dirname "${BASH_SOURCE[0]}")/syn_fix.sh"
 
 DOCTOR_SH_VERSION="1.1"
 
@@ -154,16 +158,35 @@ run_doctor_full() {
     fi
   done
 
-  sni_mode=$(meko_install_mode 2>/dev/null || echo none)
-  if [ "$sni_mode" = "inline" ] || [ "$sni_mode" = "full" ]; then
-    if systemctl is-active --quiet mtpr-synfix 2>/dev/null; then
-      doctor_record "MEKO mtpr-synfix" pass "active (v$(meko_installed_version 2>/dev/null || echo ?))"
-    else
-      doctor_record "MEKO mtpr-synfix" fail "не active"
-    fi
-  else
-    doctor_record "MEKO" warn "не установлен"
-  fi
+  case "${SYN_FIX_MODE:-meko}" in
+    meko)
+      sni_mode=$(meko_install_mode 2>/dev/null || echo none)
+      if [ "$sni_mode" = "inline" ] || [ "$sni_mode" = "full" ]; then
+        if systemctl is-active --quiet mtpr-synfix 2>/dev/null; then
+          doctor_record "MEKO mtpr-synfix" pass "active (v$(meko_installed_version 2>/dev/null || echo ?))"
+        else
+          doctor_record "MEKO mtpr-synfix" fail "не active"
+        fi
+      else
+        doctor_record "MEKO" warn "не установлен"
+      fi
+      ;;
+    zapret2)
+      if zapret2_service_active; then
+        doctor_record "Zapret2 fix" pass "active (NFQUEUE ${ZAPRET2_QNUM:-200})"
+      else
+        doctor_record "Zapret2 fix" fail "tg-zapret2 не active"
+      fi
+      if nft list table ip "$ZAPRET2_NFT_TABLE" >/dev/null 2>&1; then
+        doctor_record "Zapret2 NFT" pass "таблица $ZAPRET2_NFT_TABLE"
+      else
+        doctor_record "Zapret2 NFT" fail "таблица $ZAPRET2_NFT_TABLE отсутствует"
+      fi
+      ;;
+    none)
+      doctor_record "SYN-фикс" warn "отключён"
+      ;;
+  esac
 
   if telemt_listens_443; then
     doctor_record "Порт 443" pass "telemt слушает"
@@ -187,7 +210,9 @@ run_doctor_full() {
 
   doctor_check_ssl "$domain"
   doctor_check_sni
-  doctor_check_meko_syn_ratio
+  if syn_fix_is_meko && [ "$(meko_install_mode 2>/dev/null || echo none)" != "none" ]; then
+    doctor_check_meko_syn_ratio
+  fi
   doctor_check_proxy_mode
 
   if ssl_renew_hook_installed; then

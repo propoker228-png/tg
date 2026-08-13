@@ -142,51 +142,102 @@ menu_ssl() {
   pause_key_menu
 }
 
-menu_meko() {
+menu_syn_fix() {
   local c=""
   require_installed || return 0
+  env_load_settings 2>/dev/null || true
+  SYN_FIX_MODE="${SYN_FIX_MODE:-meko}"
 
   while true; do
     clear
-    echo "=== MEKO SYN FIX ==="
-    meko_show_version_info
+    echo "=== SYN-фикс / обход DPI ==="
+    echo "  Режим: $(syn_fix_label)"
     echo ""
-    echo "  1) Обновить MEKO SYN FIX"
-    echo "  2) Переустановить правила (inline)"
-    echo "  3) Диагностика hashlimit (benchmark)"
+    case "${SYN_FIX_MODE:-meko}" in
+      meko)
+        meko_show_version_info
+        echo ""
+        echo "  1) Обновить MEKO SYN FIX"
+        echo "  2) Переустановить правила (inline)"
+        echo "  3) Диагностика hashlimit (benchmark)"
+        ;;
+      zapret2)
+        echo "  Служба: $(zapret2_status_label)"
+        echo "  NFQUEUE: ${ZAPRET2_QNUM:-?}  порт: ${PROXY_PORT:-443}"
+        echo ""
+        echo "  1) Перезапустить tg-zapret2"
+        echo "  2) Переустановить Zapret2"
+        ;;
+      none)
+        echo "  SYN-фикс не установлен."
+        echo ""
+        echo "  1) Установить SYN-фикс"
+        ;;
+    esac
+    echo "  9) Сменить режим SYN-фикса"
     echo "  0) Назад"
     prompt_line c "Выбор" ""
     case "$c" in
       1)
-        if [ "$(meko_install_mode)" = "full" ]; then
-          log_warn "Режим MEKO Launcher — inline-обновление недоступно"
-          sleep 2
-          continue
-        fi
-        if meko_update_available; then
-          confirm_action "Обновить MEKO SYN FIX до v$(meko_bundled_version)?" \
-            && meko_upgrade_inline
-        else
-          log_info "Установлена актуальная версия v$(meko_installed_version)"
-          sleep 2
-        fi
+        case "${SYN_FIX_MODE:-meko}" in
+          meko)
+            if [ "$(meko_install_mode)" = "full" ]; then
+              log_warn "Режим MEKO Launcher — inline-обновление недоступно"
+              sleep 2
+              continue
+            fi
+            if meko_update_available; then
+              confirm_action "Обновить MEKO SYN FIX до v$(meko_bundled_version)?" \
+                && meko_upgrade_inline
+            else
+              log_info "Установлена актуальная версия v$(meko_installed_version)"
+              sleep 2
+            fi
+            ;;
+          zapret2)
+            confirm_action "Перезапустить tg-zapret2?" \
+              && systemctl restart tg-zapret2.service \
+              && log_ok "tg-zapret2 перезапущен"
+            ;;
+          none)
+            pick_syn_fix_mode
+            confirm_action "Установить $(syn_fix_label)?" && syn_fix_install && save_state
+            ;;
+        esac
         ;;
       2)
-        if [ "$(meko_install_mode)" = "full" ]; then
-          log_warn "Режим MEKO Launcher — используйте mekopr для переустановки"
-          sleep 2
-          continue
-        fi
-        confirm_action "Переустановить MEKO inline?" && meko_upgrade_inline
+        case "${SYN_FIX_MODE:-meko}" in
+          meko)
+            if [ "$(meko_install_mode)" = "full" ]; then
+              log_warn "Режим MEKO Launcher — используйте mekopr для переустановки"
+              sleep 2
+              continue
+            fi
+            confirm_action "Переустановить MEKO inline?" && meko_upgrade_inline
+            ;;
+          zapret2)
+            confirm_action "Переустановить Zapret2?" && syn_fix_install && save_state
+            ;;
+        esac
         ;;
       3|benchmark|diag)
+        syn_fix_is_meko || { log_warn "Доступно только для MEKO"; sleep 2; continue; }
         meko_diag_run_benchmark
         prompt_line c "Enter для продолжения" ""
+        ;;
+      9)
+        pick_syn_fix_mode
+        confirm_action "Применить $(syn_fix_label)? Текущий фикс будет заменён." \
+          && syn_fix_install && save_state
         ;;
       0) break ;;
       *) log_warn "Неверный выбор"; sleep 1 ;;
     esac
   done
+}
+
+menu_meko() {
+  menu_syn_fix
 }
 
 menu_firewall() {
@@ -362,7 +413,7 @@ main_menu() {
     echo "  4)  Сервисы"
     echo "  5)  Настройки прокси"
     echo "  6)  SSL"
-    echo "  7)  MEKO SYN FIX"
+    echo "  7)  SYN-фикс / обход DPI"
     echo "  8)  Firewall"
     echo "  9)  Проверки"
     echo "  10) Обновить telemt"
@@ -382,7 +433,7 @@ main_menu() {
       4) menu_services ;;
       5) menu_proxy_settings ;;
       6) menu_ssl ;;
-      7) menu_meko ;;
+      7) menu_syn_fix ;;
       8) menu_firewall ;;
       9) menu_verify ;;
       10) menu_upgrade_telemt ;;

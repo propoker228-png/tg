@@ -4,6 +4,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/proxy_mode.sh"
 # shellcheck source=stub_site.sh
 source "$(dirname "${BASH_SOURCE[0]}")/stub_site.sh"
+# shellcheck source=syn_fix.sh
+source "$(dirname "${BASH_SOURCE[0]}")/syn_fix.sh"
 
 UI_HIGHLIGHT_SH_VERSION="1.0"
 
@@ -59,9 +61,14 @@ print_install_summary() {
     echo -e "  SSL:         $(hl_ssl)"
   fi
   echo -e "  Режим:      $(proxy_mode_label)"
+  echo -e "  SYN-фикс:   ${CYAN}${BOLD}$(syn_fix_label)${NC}"
   echo -e "  Сайт:       ${CYAN}${BOLD}$(stub_site_label "${STUB_SITE:-it-services}")${NC}"
-  echo -e "  telemt:     $(hl_telemt_version "${TELEMT_VERSION}" "${TELEMT_VERSION_HINT:-}")"
-  echo -e "  MEKO:       $(hl_meko "$meko_mode" "${MEKO_VERSION:-$(meko_bundled_version)}")"
+  if syn_fix_is_meko; then
+    echo -e "  telemt:     $(hl_telemt_version "${TELEMT_VERSION}" "${TELEMT_VERSION_HINT:-}")"
+    echo -e "  MEKO:       $(hl_meko "$meko_mode" "${MEKO_VERSION:-$(meko_bundled_version)}")"
+  else
+    echo -e "  telemt:     $(hl_telemt_version "${TELEMT_VERSION}" "${TELEMT_VERSION_HINT:-}")"
+  fi
   echo -e "  ad_tag:     $(hl_adtag "${AD_TAG:-}")"
   echo -e "${BOLD}══════════════════════════════════════${NC}"
   echo ""

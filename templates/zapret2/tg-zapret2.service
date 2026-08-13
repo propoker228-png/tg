@@ -1,0 +1,16 @@
+[Unit]
+Description=telemt-deploy Zapret2 MTProto fix
+After=network-online.target nftables.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/tg-zapret2-start.sh
+ExecStop=/usr/sbin/nft delete table ip TgDeployZ2
+Restart=on-failure
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

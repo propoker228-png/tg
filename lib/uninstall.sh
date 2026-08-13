@@ -1,11 +1,13 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+# shellcheck source=zapret2.sh
+source "$(dirname "${BASH_SOURCE[0]}")/zapret2.sh"
 
 uninstall_all() {
   log_warn "Удаление telemt-deploy стека..."
 
-  systemctl stop telemt mtpr-synfix 2>/dev/null || true
-  systemctl disable telemt mtpr-synfix 2>/dev/null || true
+  systemctl stop telemt mtpr-synfix tg-zapret2 2>/dev/null || true
+  systemctl disable telemt mtpr-synfix tg-zapret2 2>/dev/null || true
 
   rm -f /etc/systemd/system/telemt.service /etc/systemd/system/mtpr-synfix.service
   systemctl stop telemt-shaping.timer telemt-shaping.service 2>/dev/null || true
@@ -27,6 +29,7 @@ uninstall_all() {
   iptables -t filter -D INPUT -j MTPR_SYNFIX 2>/dev/null || true
   iptables -t filter -F MTPR_SYNFIX 2>/dev/null || true
   iptables -t filter -X MTPR_SYNFIX 2>/dev/null || true
+  zapret2_remove 2>/dev/null || true
 
   ufw delete allow 80/tcp 2>/dev/null || true
   ufw delete allow 443/tcp 2>/dev/null || true

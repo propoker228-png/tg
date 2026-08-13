@@ -29,6 +29,7 @@ env_collect_components() {
   env_telemt_active && ENV_COMPONENTS+=("service: telemt (active)")
   env_nginx_telemt_configured && ENV_COMPONENTS+=("nginx: telemt-site")
   env_meko_configured && ENV_COMPONENTS+=("meko: mtpr-synfix")
+  zapret2_is_installed && ENV_COMPONENTS+=("zapret2: tg-zapret2")
   if telemt_listens_443; then
     ENV_COMPONENTS+=("listen: tcp/443 (telemt)")
   fi
@@ -43,7 +44,7 @@ env_load_settings() {
   if [ -f "$STATE_FILE" ]; then
     # shellcheck disable=SC1090
     source "$STATE_FILE"
-    export DOMAIN SECRET AD_TAG TLS_DOMAIN INSTALL_IP_ONLY PROXY_MODE STUB_SITE
+    export DOMAIN SECRET AD_TAG TLS_DOMAIN INSTALL_IP_ONLY PROXY_MODE STUB_SITE SYN_FIX_MODE
   fi
 
   PROXY_MODE="${PROXY_MODE:-tls}"

@@ -61,13 +61,15 @@ shaping_load_config() {
     return 0
   fi
   eval "$(python3 - "$SHAPING_CONFIG_FILE" <<'PY'
-import json, sys
+import json, shlex, sys
 
 data = json.load(open(sys.argv[1]))
 print(f"SHAPING_ENABLED={1 if data.get('enabled') else 0}")
 g = data.get("global_mbit", 0)
+if isinstance(g, float) and g == int(g):
+    g = int(g)
 print(f"SHAPING_GLOBAL_MBIT={g}")
-print("SHAPING_OVERRIDES_JSON=" + json.dumps(data.get("overrides") or {}))
+print("SHAPING_OVERRIDES_JSON=" + shlex.quote(json.dumps(data.get("overrides") or {})))
 PY
 )"
   export SHAPING_ENABLED SHAPING_GLOBAL_MBIT SHAPING_OVERRIDES_JSON

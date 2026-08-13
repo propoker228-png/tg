@@ -197,9 +197,12 @@ prepare_install_options() {
   fi
   prepare_install_mask_domain
   pick_stub_site
+  pick_syn_fix_mode
   pick_telemt_version
-  pick_meko_type
-  pick_meko_version
+  if syn_fix_is_meko; then
+    pick_meko_type
+    pick_meko_version
+  fi
   prompt_ad_tag_colored
   print_install_summary
   confirm_action "Начать установку?" || die "Установка отменена"

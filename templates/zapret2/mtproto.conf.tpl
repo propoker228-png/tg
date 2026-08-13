@@ -1,0 +1,13 @@
+--qnum ${ZAPRET2_QNUM}
+--fwmark=0x40000000
+--server
+
+--lua-init=@${ZAPRET2_DIR}/lua/zapret-lib.lua
+--lua-init=@${ZAPRET2_DIR}/lua/zapret-antidpi.lua
+--lua-init=@${ZAPRET2_DIR}/lua/mtproto.lua
+--filter-tcp=${PROXY_PORT}
+--out-range=a
+--in-range=a
+--payload-disable=all
+--lua-desync=lets_resend
+--new
