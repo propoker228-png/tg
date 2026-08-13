@@ -335,7 +335,7 @@ run_cluster_node_install() {
   cluster_import_secret || telemt_generate_secret
   export CLUSTER_DOMAIN CLUSTER_ROLE
 
-  run_install_flow
+  run_install_flow || log_warn "Установка ноды не завершена полностью — часть этапов пропущена или прервана"
 
   cluster_register_self_node
   log_info "Нода зарегистрирована в кластере ${CLUSTER_DOMAIN}"

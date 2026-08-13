@@ -1,9 +1,82 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+# shellcheck source=install_step.sh
+source "$(dirname "${BASH_SOURCE[0]}")/install_step.sh"
 
-INSTALL_FLOW_SH_VERSION="1.2"
+INSTALL_FLOW_SH_VERSION="1.3"
+
+_install_step_ssl_obtain_cert() {
+  ssl_obtain_cert "$DOMAIN"
+}
+
+_install_step_ssl_self_signed() {
+  ssl_install_self_signed "$TLS_DOMAIN"
+}
+
+_install_step_ssl_renew_hook() {
+  ssl_install_renew_hook
+}
+
+_install_step_verify() {
+  verify_install "$DOMAIN"
+}
+
+_install_step_handoff() {
+  show_mtproxybot_handoff "$DOMAIN"
+}
+
+_install_step_ad_tag_restart() {
+  [ -n "${AD_TAG:-}" ] || return 0
+  systemctl restart telemt
+  wait_telemt_port_443 30 || log_warn "telemt перезапущен, ожидание порта 443 продолжается"
+  verify_install "$DOMAIN" || log_warn "Проверка после применения ad_tag выявила проблемы"
+}
+
+_install_step_save_state() {
+  save_state
+}
+
+_install_step_tg_command() {
+  install_tg_command
+}
+
+_install_step_syn_fix_upgrade() {
+  syn_fix_upgrade_if_needed
+}
+
+_install_step_online_stats() {
+  show_proxy_online_stats
+}
+
+_install_flow_build_steps() {
+  INSTALL_FLOW_STEPS=()
+  INSTALL_FLOW_STEPS+=("prereq|Пакеты и sysctl|0|prereq_install")
+
+  if install_is_ip_only; then
+    INSTALL_FLOW_STEPS+=("ssl_self|Self-signed SSL|1|_install_step_ssl_self_signed")
+    INSTALL_FLOW_STEPS+=("nginx|nginx (production)|1|nginx_install_production")
+  else
+    INSTALL_FLOW_STEPS+=("nginx_temp|nginx (ACME)|1|nginx_install_temp")
+    INSTALL_FLOW_STEPS+=("ssl|Let's Encrypt|1|_install_step_ssl_obtain_cert")
+    INSTALL_FLOW_STEPS+=("ssl_renew|Автообновление SSL|1|_install_step_ssl_renew_hook")
+    INSTALL_FLOW_STEPS+=("nginx|nginx (production)|1|nginx_install_production")
+  fi
+
+  INSTALL_FLOW_STEPS+=("telemt|telemt|0|telemt_install")
+  INSTALL_FLOW_STEPS+=("syn_fix|SYN-фикс|1|syn_fix_install")
+  INSTALL_FLOW_STEPS+=("firewall|UFW|1|firewall_setup")
+  INSTALL_FLOW_STEPS+=("verify|Проверка установки|1|_install_step_verify")
+  INSTALL_FLOW_STEPS+=("handoff|Данные для @MTProxybot|1|_install_step_handoff")
+  INSTALL_FLOW_STEPS+=("ad_tag|Применение ad_tag|1|_install_step_ad_tag_restart")
+  INSTALL_FLOW_STEPS+=("state|Сохранение состояния|0|_install_step_save_state")
+  INSTALL_FLOW_STEPS+=("tg_cmd|Команда tg|1|_install_step_tg_command")
+  INSTALL_FLOW_STEPS+=("syn_upgrade|Обновление SYN-фикса|1|_install_step_syn_fix_upgrade")
+  INSTALL_FLOW_STEPS+=("stats|Статистика прокси|1|_install_step_online_stats")
+}
 
 run_install_flow() {
+  local i=0 total=0 step_id="" step_label="" skippable="" step_func="" rc=0
+
   [ -n "${DOMAIN:-}" ] || die "Адрес подключения не задан"
   if install_is_ip_only; then
     [ -n "${TLS_DOMAIN:-}" ] || die "Домен маскировки (TLS_DOMAIN) обязателен в режиме без своего домена"
@@ -23,35 +96,40 @@ run_install_flow() {
     fi
   fi
 
-  prereq_install
-  if install_is_ip_only; then
-    ssl_install_self_signed "$TLS_DOMAIN"
-    nginx_install_production
-  else
-    nginx_install_temp
-    ssl_obtain_cert "$DOMAIN"
-    ssl_install_renew_hook
-    nginx_install_production
-  fi
-  telemt_install
-  syn_fix_install
-  firewall_setup
-  verify_install "$DOMAIN" || log_warn "Проверка выявила проблемы, продолжаем handoff"
+  install_step_reset
+  _install_flow_build_steps
+  total="${#INSTALL_FLOW_STEPS[@]}"
 
-  show_mtproxybot_handoff "$DOMAIN"
+  i=0
+  while [ "$i" -lt "$total" ]; do
+    IFS='|' read -r step_id step_label skippable step_func <<< "${INSTALL_FLOW_STEPS[$i]}"
+    log_info "── Этап $((i + 1))/${total}: ${step_label} ──"
 
-  if [ -n "${AD_TAG:-}" ]; then
-    systemctl restart telemt
-    wait_telemt_port_443 30 || log_warn "telemt перезапущен, ожидание порта 443 продолжается"
-    verify_install "$DOMAIN" || log_warn "Проверка после применения ad_tag выявила проблемы"
-  fi
+    install_step_run "$step_id" "$step_label" "$skippable" "$step_func" || {
+      rc=$?
+      case "$rc" in
+        2)
+          if [ "$i" -gt 0 ]; then
+            i=$((i - 1))
+            log_info "Возврат к предыдущему этапу"
+          else
+            log_warn "Это первый этап — выберите повтор или прервите установку"
+          fi
+          continue
+          ;;
+        *)
+          log_err "Установка прервана на этапе: ${step_label}"
+          return 1
+          ;;
+      esac
+    }
+    i=$((i + 1))
+  done
 
-  save_state
-  install_tg_command
-  syn_fix_upgrade_if_needed
-  show_proxy_online_stats
+  install_step_show_skipped_summary
   log_ok "Установка завершена"
   log_info "Меню управления: tg"
+  return 0
 }
 
 prepare_install_domain() {

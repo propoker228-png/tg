@@ -128,7 +128,7 @@ remote_bootstrap
 
 # shellcheck source=lib/common.sh
 source "$DEPLOY_ROOT/lib/common.sh"
-for mod in proxy_mode prereq stub_site syn_fix zapret2 dns nginx ssl ssl_renew telemt meko meko_stats meko_diag firewall dialog ui_highlight mask_picker version_picker sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor shaping install_flow cli_tools menu; do
+for mod in proxy_mode prereq stub_site syn_fix zapret2 dns nginx ssl ssl_renew telemt meko meko_stats meko_diag firewall dialog ui_highlight mask_picker version_picker sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor shaping install_step install_flow cli_tools menu; do
   # shellcheck source=/dev/null
   source "$DEPLOY_ROOT/lib/${mod}.sh"
 done
@@ -233,8 +233,12 @@ require_lib_bundle() {
     echo "[X] Отсутствует lib/dialog.sh (v1.0) — скопируйте lib/dialog.sh на сервер" >&2
     missing=1
   fi
-  if [ "${INSTALL_FLOW_SH_VERSION:-}" != "1.1" ] && [ "${INSTALL_FLOW_SH_VERSION:-}" != "1.2" ]; then
+  if [ "${INSTALL_FLOW_SH_VERSION:-}" != "1.1" ] && [ "${INSTALL_FLOW_SH_VERSION:-}" != "1.2" ] && [ "${INSTALL_FLOW_SH_VERSION:-}" != "1.3" ]; then
     echo "[X] Устаревший lib/install_flow.sh (нужен v1.1+) — скопируйте lib/install_flow.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${INSTALL_STEP_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/install_step.sh (v1.0) — скопируйте lib/install_step.sh на сервер" >&2
     missing=1
   fi
   if [ "${MEKO_SH_VERSION:-}" != "1.2" ] && [ "${MEKO_SH_VERSION:-}" != "1.3" ] && [ "${MEKO_SH_VERSION:-}" != "1.4" ]; then
@@ -481,10 +485,12 @@ if has_action_flags; then
   esac
   set +e
   handle_existing_env
-  set -euo pipefail
   prepare_install_domain
   prepare_install_options
   run_install_flow
+  flow_rc=$?
+  set -euo pipefail
+  [ "$flow_rc" -eq 0 ] || exit "$flow_rc"
   exit 0
 fi
 

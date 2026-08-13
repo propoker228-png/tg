@@ -85,7 +85,7 @@ wizard_standalone() {
   prepare_install_options
   print_role_summary "standalone"
   confirm_action "Начать установку?" || die "Отменено"
-  run_install_flow
+  run_install_flow || log_warn "Установка не завершена — часть этапов пропущена или прервана"
 }
 
 is_valid_cluster_secret_hex() {

@@ -249,6 +249,20 @@ check_stub_site_resolver() {
   )
 }
 
+check_install_step_runner() {
+  (
+    # shellcheck source=../lib/install_step.sh
+    source "$ROOT/lib/install_step.sh"
+    _fail_step() { return 42; }
+    _ok_step() { return 0; }
+    install_step_run_once _ok_step
+    ! install_step_run_once _fail_step
+    INSTALL_SKIPPED_STEPS=("ssl")
+    install_step_skipped ssl
+    ! install_step_skipped telemt
+  )
+}
+
 check_syn_fix_resolver() {
   (
     # shellcheck source=../lib/syn_fix.sh
@@ -286,6 +300,7 @@ check_cmd_ok "prereq command mapping" check_prereq_cmd_mapping
 check_cmd_ok "stub site templates present" check_stub_site_template
 check_cmd_ok "stub site resolver" check_stub_site_resolver
 check_cmd_ok "syn fix resolver" check_syn_fix_resolver
+check_cmd_ok "install step runner" check_install_step_runner
 check_cmd_ok "zapret2 templates present" check_zapret2_templates
 check_cmd_ok "tg template present" check_tg_template
 check_cmd_ok "confirm_action cli fallback" check_confirm_action_cli_fallback
