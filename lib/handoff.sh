@@ -3,7 +3,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 show_mtproxybot_handoff() {
   local domain="$1"
-  local link=""
+  local link="" secret_display
+
+  if declare -f env_load_secret >/dev/null 2>&1; then
+    env_load_secret
+  fi
 
   if declare -f cluster_load >/dev/null 2>&1; then
     cluster_load 2>/dev/null || true
@@ -19,7 +23,12 @@ show_mtproxybot_handoff() {
   echo -e "${BOLD}  Данные для @MTProxybot${NC}"
   echo -e "${BOLD}══════════════════════════════════════════════${NC}"
   echo -e "  Сервер:  ${CYAN}${domain}:443${NC}"
-  echo -e "  Секрет:  ${CYAN}${SECRET}${NC}"
+  secret_display="${SECRET:-}"
+  if [ -z "$secret_display" ]; then
+    secret_display="н/д"
+    log_warn "Секрет не найден — проверьте ${SECRET_FILE} или /etc/telemt/telemt.toml"
+  fi
+  echo -e "  Секрет:  ${CYAN}${secret_display}${NC}"
   echo -e "  Ссылка:  ${CYAN}${link}${NC}"
   show_proxy_online_stats
   echo "  1. @MTProxybot → /newproxy"

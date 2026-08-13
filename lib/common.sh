@@ -345,6 +345,9 @@ prompt_choice_12() {
 }
 
 save_state() {
+  if declare -f env_load_secret >/dev/null 2>&1; then
+    env_load_secret
+  fi
   TLS_DOMAIN="${TLS_DOMAIN:-$DOMAIN}"
   cat > "$STATE_FILE" <<EOF
 DOMAIN=$DOMAIN

@@ -40,6 +40,21 @@ existing_env_detected() {
   [ "${#ENV_COMPONENTS[@]}" -gt 0 ]
 }
 
+env_load_secret() {
+  if [ -n "${SECRET:-}" ]; then
+    return 0
+  fi
+  if [ -f "$SECRET_FILE" ]; then
+    SECRET=$(tr -d '[:space:]' < "$SECRET_FILE")
+    export SECRET
+    return 0
+  fi
+  if [ -f /etc/telemt/telemt.toml ]; then
+    SECRET=$(awk -F'"' '/^default = / { print $2; exit }' /etc/telemt/telemt.toml)
+    [ -n "${SECRET:-}" ] && export SECRET
+  fi
+}
+
 env_load_settings() {
   if [ -f "$STATE_FILE" ]; then
     # shellcheck disable=SC1090
@@ -50,15 +65,7 @@ env_load_settings() {
   PROXY_MODE="${PROXY_MODE:-tls}"
   export PROXY_MODE
 
-  if [ -z "${SECRET:-}" ] && [ -f "$SECRET_FILE" ]; then
-    SECRET=$(cat "$SECRET_FILE")
-    export SECRET
-  fi
-
-  if [ -z "${SECRET:-}" ] && [ -f /etc/telemt/telemt.toml ]; then
-    SECRET=$(awk -F'"' '/^default = / { print $2; exit }' /etc/telemt/telemt.toml)
-    export SECRET
-  fi
+  env_load_secret
 
   if [ -z "${DOMAIN:-}" ] && [ -f /etc/telemt/telemt.toml ]; then
     DOMAIN=$(

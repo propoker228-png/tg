@@ -280,6 +280,34 @@ check_zapret2_templates() {
     && [ -f "$ROOT/templates/zapret2/tg-zapret2-start.sh.tpl" ]
 }
 
+check_handoff_no_secret() {
+  (
+    # shellcheck source=../lib/env.sh
+    source "$ROOT/lib/env.sh"
+    # shellcheck source=../lib/handoff.sh
+    source "$ROOT/lib/handoff.sh"
+    unset SECRET
+    show_mtproxybot_handoff "203.0.113.10" | grep -q "н/д"
+  )
+}
+
+check_handoff_loads_secret_file() {
+  (
+    local tmp="$ROOT/.tmp-handoff-secret"
+    # shellcheck source=../lib/env.sh
+    source "$ROOT/lib/env.sh"
+    # shellcheck source=../lib/handoff.sh
+    source "$ROOT/lib/handoff.sh"
+    printf '%s' '0123456789abcdef0123456789abcdef' > "$tmp"
+    SECRET_FILE="$tmp"
+    export SECRET_FILE
+    unset SECRET
+    env_load_secret
+    [ "${SECRET:-}" = "0123456789abcdef0123456789abcdef" ]
+    rm -f "$tmp"
+  )
+}
+
 check_tg_template() {
   grep -q '@DEPLOY_ROOT@' "$ROOT/templates/tg"
 }
@@ -290,6 +318,8 @@ done
 
 check_cmd_ok "backup manifest paths" check_backup_manifest_paths
 check_cmd_ok "doctor aggregate counters" check_doctor_aggregate
+check_cmd_ok "handoff without secret" check_handoff_no_secret
+check_cmd_ok "handoff loads secret file" check_handoff_loads_secret_file
 check_cmd_ok "parse release versions" check_parse_release_versions
 check_cmd_ok "install summary render" check_install_summary_render
 check_cmd_ok "common helper validators" check_helpers
