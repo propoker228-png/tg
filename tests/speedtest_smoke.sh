@@ -33,4 +33,10 @@ mixed=$'progress: 50%\n{"download":{"bandwidth":12500000},"upload":{"bandwidth":
 extracted=$(printf '%s' "$mixed" | speedtest_extract_json)
 [ -n "$extracted" ] && pass "extract json from mixed output" || fail "extract json"
 
+r=$(speedtest_profile_upload_mb quick)
+[ "$r" = "10" ] && pass "profile quick upload mb" || fail "quick upload mb got=$r"
+
+r=$(speedtest_profile_upload_mb full)
+[ "$r" = "25" ] && pass "profile full upload mb" || fail "full upload mb got=$r"
+
 exit "$FAIL"

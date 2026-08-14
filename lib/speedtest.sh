@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-SPEEDTEST_SH_VERSION="1.2"
+SPEEDTEST_SH_VERSION="1.3"
 SPEEDTEST_PROFILE_QUICK="quick"
 SPEEDTEST_PROFILE_FULL="full"
 
@@ -131,10 +131,25 @@ speedtest_install_ookla() {
   speedtest_detect_backend >/dev/null 2>&1
 }
 
-speedtest_last_error_line() {
-  local raw="$1" line
-  line=$(printf '%s\n' "$raw" | grep -Evi '^\{' | grep -v '^[[:space:]]*$' | tail -1 || true)
-  [ -n "$line" ] && log_warn "speedtest: ${line}"
+speedtest_profile_upload_mb() {
+  case "${1:-quick}" in
+    full|2) echo "25" ;;
+    *) echo "10" ;;
+  esac
+}
+
+speedtest_explain_failure() {
+  local raw="$1"
+  if printf '%s\n' "$raw" | grep -qi 'name resolution'; then
+    log_warn "DNS не резолвит speedtest.net — speedtest-cli/Ookla недоступны"
+    log_warn "Проверьте /etc/resolv.conf (например: nameserver 1.1.1.1)"
+    return 0
+  fi
+  if printf '%s\n' "$raw" | grep -qi 'Cannot retrieve speedtest configuration'; then
+    log_warn "speedtest-cli: не удалось получить список серверов (DNS или блокировка speedtest.net)"
+    return 0
+  fi
+  speedtest_last_error_line "$raw"
 }
 
 speedtest_run_json_report() {
@@ -176,7 +191,7 @@ speedtest_run_legacy() {
   if speedtest_run_json_report "speedtest-cli" "$raw"; then
     return 0
   fi
-  speedtest_last_error_line "$raw"
+  speedtest_explain_failure "$raw"
   return 1
 }
 
@@ -207,7 +222,7 @@ speedtest_fallback_urls() {
 
 speedtest_run_fallback_download() {
   local profile="$1" url result time bytes mbit
-  echo -e "${BOLD}Режим: упрощённый (curl/ping)${NC}"
+  echo -e "${BOLD}Режим: упрощённый (curl/Cloudflare)${NC}"
   while IFS= read -r url; do
     [ -n "$url" ] || continue
     result=$(curl -4 -fsSL -o /dev/null -w '%{time_total} %{size_download}' --max-time 60 "$url" 2>/dev/null) || continue
@@ -215,11 +230,23 @@ speedtest_run_fallback_download() {
     bytes="${result##* }"
     mbit=$(speedtest_format_mbit "$bytes" "$time")
     echo "Download:  ${mbit} Mbit/s  (${url})"
-    echo "Upload:    н/д (требуется speedtest-cli/Ookla)"
     return 0
   done < <(speedtest_fallback_urls "$profile")
   log_err "Не удалось скачать тестовый файл — проверьте сеть и firewall"
   return 1
+}
+
+speedtest_run_fallback_upload() {
+  local profile="$1" mb url time bytes mbit
+  mb=$(speedtest_profile_upload_mb "$profile")
+  bytes=$((mb * 1048576))
+  url="https://speed.cloudflare.com/__up"
+  time=$(dd if=/dev/zero bs=1M count="$mb" 2>/dev/null | curl -4 -fsSL -o /dev/null -w '%{time_total}' --max-time 120 -X POST -H "Content-Type: application/octet-stream" --data-binary @- "$url" 2>/dev/null) || {
+    echo "Upload:    н/д (cloudflare недоступен)"
+    return 1
+  }
+  mbit=$(speedtest_format_mbit "$bytes" "$time")
+  echo "Upload:    ${mbit} Mbit/s  (${url}, ~${mb} MB)"
 }
 
 speedtest_run_fallback_ping() {
@@ -236,12 +263,18 @@ run_speedtest() {
   log_warn "Тест использует интернет-трафик (полный режим может занять 1–2 мин)"
   if speedtest_detect_backend >/dev/null 2>&1 || speedtest_install_ookla; then
     speedtest_run_full && return 0
-    log_warn "Speedtest не ответил — переключаюсь на упрощённый режим"
+    log_warn "Переключаюсь на упрощённый режим (curl + Cloudflare upload)"
   fi
   speedtest_run_fallback_download "$profile" || return 1
+  speedtest_run_fallback_upload "$profile" || true
   speedtest_run_fallback_ping
 }
 
 # Backward-compatible aliases for smoke tests
+speedtest_last_error_line() {
+  local raw="$1" line
+  line=$(printf '%s\n' "$raw" | grep -Evi '^\{' | grep -v '^[[:space:]]*$' | tail -1 || true)
+  [ -n "$line" ] && log_warn "speedtest: ${line}"
+}
 speedtest_extract_ookla_json() { speedtest_extract_json; }
 speedtest_parse_ookla_json() { speedtest_parse_json; }

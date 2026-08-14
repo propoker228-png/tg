@@ -247,7 +247,7 @@ require_lib_bundle() {
     echo "[X] Отсутствует lib/access_limits.sh (v1.0)" >&2
     missing=1
   fi
-  if [ "${SPEEDTEST_SH_VERSION:-}" != "1.0" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.1" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.2" ]; then
+  if [ "${SPEEDTEST_SH_VERSION:-}" != "1.0" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.1" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.2" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.3" ]; then
     echo "[X] Отсутствует lib/speedtest.sh (v1.0)" >&2
     missing=1
   fi
