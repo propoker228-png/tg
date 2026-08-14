@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-SPEEDTEST_SH_VERSION="1.0"
+SPEEDTEST_SH_VERSION="1.1"
 SPEEDTEST_PROFILE_QUICK="quick"
 SPEEDTEST_PROFILE_FULL="full"
 
@@ -23,7 +23,7 @@ speedtest_profile_bytes() {
   esac
 }
 
-speedtest_extract_ookla_json() {
+speedtest_extract_json() {
   python3 <<'PY'
 import json, sys
 text = sys.stdin.read()
@@ -41,36 +41,72 @@ json.dump(data)
 PY
 }
 
-speedtest_parse_ookla_json() {
+speedtest_parse_json() {
   python3 <<'PY'
 import json, sys
+
+def to_mbit(bytes_per_sec):
+    return float(bytes_per_sec or 0) * 8 / 1_000_000
+
 try:
     data = json.load(sys.stdin)
 except json.JSONDecodeError:
     sys.exit(1)
-dl = data.get("download", {}).get("bandwidth", 0) * 8 / 1_000_000
-ul = data.get("upload", {}).get("bandwidth", 0) * 8 / 1_000_000
-ping = data.get("ping", {})
-lat = ping.get("latency", 0)
-jit = ping.get("jitter", 0)
-srv = data.get("server", {})
-loc = srv.get("location") or srv.get("name") or "н/д"
-isp = data.get("isp") or "н/д"
+
+dl_raw = data.get("download")
+ul_raw = data.get("upload")
+ping_raw = data.get("ping")
+
+if isinstance(dl_raw, dict):
+    dl = to_mbit(dl_raw.get("bandwidth", 0))
+    ul = to_mbit(ul_raw.get("bandwidth", 0) if isinstance(ul_raw, dict) else 0)
+    lat = ping_raw.get("latency", 0) if isinstance(ping_raw, dict) else 0
+    jit = ping_raw.get("jitter", 0) if isinstance(ping_raw, dict) else 0
+    srv = data.get("server", {})
+    loc = srv.get("location") or srv.get("name") or srv.get("country") or "н/д"
+    isp = data.get("isp") or "н/д"
+else:
+    dl = to_mbit(dl_raw)
+    ul = to_mbit(ul_raw)
+    lat = float(ping_raw or 0)
+    jit = 0
+    srv = data.get("server", {})
+    loc = srv.get("name") or srv.get("country") or "н/д"
+    client = data.get("client", {})
+    isp = client.get("isp") or "н/д"
+
 print(f"Download:  {dl:.1f} Mbit/s")
 print(f"Upload:    {ul:.1f} Mbit/s")
 print(f"Ping:      {lat:.1f} ms")
-print(f"Jitter:    {jit:.1f} ms")
+if jit:
+    print(f"Jitter:    {jit:.1f} ms")
 print(f"Server:    {loc}")
 print(f"ISP:       {isp}")
 PY
 }
 
-speedtest_has_ookla() {
-  command -v speedtest >/dev/null 2>&1 && speedtest --version >/dev/null 2>&1
+speedtest_detect_backend() {
+  local help version
+  command -v speedtest >/dev/null 2>&1 || return 1
+  version=$(speedtest --version 2>&1 || true)
+  if printf '%s\n' "$version" | grep -qi 'ookla'; then
+    echo "ookla"
+    return 0
+  fi
+  help=$(speedtest --help 2>&1 || true)
+  if printf '%s\n' "$help" | grep -qE '(^|[[:space:]])--format=json'; then
+    echo "ookla"
+    return 0
+  fi
+  if printf '%s\n' "$help" | grep -qE '(^|[[:space:]])--json'; then
+    echo "legacy"
+    return 0
+  fi
+  return 1
 }
 
 speedtest_install_ookla() {
-  if speedtest_has_ookla; then
+  if speedtest_detect_backend >/dev/null 2>&1; then
     return 0
   fi
   if ! is_auto_mode; then
@@ -84,15 +120,35 @@ speedtest_install_ookla() {
     log_warn "apt недоступен — Ookla не установлен"
     return 1
   fi
-  speedtest_has_ookla
+  speedtest_detect_backend >/dev/null 2>&1
+}
+
+speedtest_run_json_report() {
+  local mode_label="$1" raw json
+  raw="$2"
+  json=$(printf '%s\n' "$raw" | speedtest_extract_json) || return 1
+  echo -e "${BOLD}Режим: ${mode_label}${NC}"
+  printf '%s\n' "$json" | speedtest_parse_json || return 1
 }
 
 speedtest_run_ookla() {
-  local raw json
+  local raw
   raw=$(speedtest --accept-license --accept-gdpr --format=json 2>&1) || return 1
-  json=$(printf '%s\n' "$raw" | speedtest_extract_ookla_json) || return 1
-  echo -e "${BOLD}Режим: Ookla Speedtest${NC}"
-  printf '%s\n' "$json" | speedtest_parse_ookla_json || return 1
+  speedtest_run_json_report "Ookla Speedtest" "$raw"
+}
+
+speedtest_run_legacy() {
+  local raw
+  raw=$(speedtest --json 2>&1) || return 1
+  speedtest_run_json_report "speedtest-cli" "$raw"
+}
+
+speedtest_run_full() {
+  case "$(speedtest_detect_backend 2>/dev/null || true)" in
+    ookla) speedtest_run_ookla ;;
+    legacy) speedtest_run_legacy ;;
+    *) return 1 ;;
+  esac
 }
 
 speedtest_fallback_urls() {
@@ -122,7 +178,7 @@ speedtest_run_fallback_download() {
     bytes="${result##* }"
     mbit=$(speedtest_format_mbit "$bytes" "$time")
     echo "Download:  ${mbit} Mbit/s  (${url})"
-    echo "Upload:    н/д (требуется Ookla)"
+    echo "Upload:    н/д (требуется speedtest-cli/Ookla)"
     return 0
   done < <(speedtest_fallback_urls "$profile")
   log_err "Не удалось скачать тестовый файл — проверьте сеть и firewall"
@@ -141,10 +197,14 @@ speedtest_run_fallback_ping() {
 run_speedtest() {
   local profile="${1:-quick}"
   log_warn "Тест использует интернет-трафик"
-  if speedtest_has_ookla || speedtest_install_ookla; then
-    speedtest_run_ookla && return 0
-    log_warn "Ookla не ответил — переключаюсь на упрощённый режим"
+  if speedtest_detect_backend >/dev/null 2>&1 || speedtest_install_ookla; then
+    speedtest_run_full && return 0
+    log_warn "Speedtest не ответил — переключаюсь на упрощённый режим"
   fi
   speedtest_run_fallback_download "$profile" || return 1
   speedtest_run_fallback_ping
 }
+
+# Backward-compatible aliases for smoke tests
+speedtest_extract_ookla_json() { speedtest_extract_json; }
+speedtest_parse_ookla_json() { speedtest_parse_json; }

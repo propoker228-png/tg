@@ -17,13 +17,20 @@ r=$(speedtest_profile_bytes quick)
 r=$(speedtest_profile_bytes full)
 [ "$r" = "104857600" ] && pass "profile full bytes" || fail "full bytes got=$r"
 
-out=$(printf '%s\n' '{"download":{"bandwidth":12500000},"upload":{"bandwidth":6250000},"ping":{"latency":12.4,"jitter":1.2},"server":{"name":"Test","location":"Amsterdam"},"isp":"Test ISP"}' | speedtest_parse_ookla_json)
+out=$(printf '%s\n' '{"download":{"bandwidth":12500000},"upload":{"bandwidth":6250000},"ping":{"latency":12.4,"jitter":1.2},"server":{"name":"Test","location":"Amsterdam"},"isp":"Test ISP"}' | speedtest_parse_json)
 echo "$out" | grep -q 'Download:.*100.0 Mbit/s' && pass "parse ookla download" || fail "parse ookla download"
 echo "$out" | grep -q 'Upload:.*50.0 Mbit/s' && pass "parse ookla upload" || fail "parse ookla upload"
 echo "$out" | grep -q 'Ping:.*12.4 ms' && pass "parse ookla ping" || fail "parse ookla ping"
 
+legacy='{"download":12500000,"upload":6250000,"ping":12.4,"server":{"name":"Amsterdam","country":"Netherlands"},"client":{"isp":"Test ISP"}}'
+out=$(printf '%s\n' "$legacy" | speedtest_parse_json)
+echo "$out" | grep -q 'Download:.*100.0 Mbit/s' && pass "parse legacy download" || fail "parse legacy download"
+echo "$out" | grep -q 'Upload:.*50.0 Mbit/s' && pass "parse legacy upload" || fail "parse legacy upload"
+echo "$out" | grep -q 'Ping:.*12.4 ms' && pass "parse legacy ping" || fail "parse legacy ping"
+echo "$out" | grep -q 'ISP:.*Test ISP' && pass "parse legacy isp" || fail "parse legacy isp"
+
 mixed=$'progress: 50%\n{"download":{"bandwidth":12500000},"upload":{"bandwidth":6250000},"ping":{"latency":12.4,"jitter":1.2},"server":{"name":"Test","location":"Amsterdam"},"isp":"Test ISP"}\n'
-extracted=$(printf '%s' "$mixed" | speedtest_extract_ookla_json)
-[ -n "$extracted" ] && pass "extract ookla json from mixed output" || fail "extract ookla json"
+extracted=$(printf '%s' "$mixed" | speedtest_extract_json)
+[ -n "$extracted" ] && pass "extract json from mixed output" || fail "extract json"
 
 exit "$FAIL"
