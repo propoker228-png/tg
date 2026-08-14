@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-SPEEDTEST_SH_VERSION="1.7"
+SPEEDTEST_SH_VERSION="1.8"
 SPEEDTEST_PROFILE_QUICK="quick"
 SPEEDTEST_PROFILE_FULL="full"
 SPEEDTEST_IP_FAMILY="${SPEEDTEST_IP_FAMILY:-}"
@@ -406,20 +406,62 @@ speedtest_ookla_ip_args() {
   fi
 }
 
+speedtest_explain_ookla_failure() {
+  local raw="$1"
+  if [ -z "$raw" ]; then
+    log_warn "Ookla: пустой ответ (таймаут или блокировка серверов speedtest.net)"
+    return 0
+  fi
+  if printf '%s\n' "$raw" | grep -qi 'name resolution\|Cannot connect\|Connection refused\|timed out'; then
+    log_warn "Ookla: нет доступа к серверам speedtest.net по $(speedtest_ip_family_label)"
+    return 0
+  fi
+  speedtest_last_error_line "$raw"
+}
+
+speedtest_run_ookla_capture() {
+  local bin="$1" tmp raw
+  shift
+  tmp=$(mktemp)
+  speedtest_run_cmd "$bin" "$@" -o "$tmp" >/dev/null 2>&1 || true
+  if [ -s "$tmp" ] && speedtest_extract_json <"$tmp" >/dev/null 2>&1; then
+    cat "$tmp"
+    rm -f "$tmp"
+    return 0
+  fi
+  raw=$(speedtest_run_cmd "$bin" "$@" 2>&1) || true
+  rm -f "$tmp"
+  if [ -n "$raw" ] && printf '%s\n' "$raw" | speedtest_extract_json >/dev/null 2>&1; then
+    printf '%s\n' "$raw"
+    return 0
+  fi
+  [ -n "$raw" ] && printf '%s\n' "$raw"
+  return 1
+}
+
+speedtest_run_ookla() {
+  local raw bin ip_args extra
+  bin=$(speedtest_cli_bin)
+  [ -n "$bin" ] || return 1
+  ip_args=$(speedtest_ookla_ip_args)
+  for extra in \
+    "--accept-license --accept-gdpr -f json -P no" \
+    "--accept-license --accept-gdpr -f json --progress=no" \
+    "--accept-license --accept-gdpr --format=json -P no"
+  do
+    # shellcheck disable=SC2086
+    raw=$(speedtest_run_ookla_capture "$bin" $extra $ip_args) && speedtest_run_json_report "Ookla Speedtest" "$raw" && return 0
+    # shellcheck disable=SC2086
+    raw=$(speedtest_run_ookla_capture "$bin" $extra) && speedtest_run_json_report "Ookla Speedtest" "$raw" && return 0
+  done
+  speedtest_explain_ookla_failure "$raw"
+  return 1
+}
+
 speedtest_legacy_bind_args() {
   local src
   src=$(speedtest_primary_ip)
   [ -n "$src" ] && echo --source "$src"
-}
-
-speedtest_run_ookla() {
-  local raw bin ip_args
-  bin=$(speedtest_cli_bin)
-  [ -n "$bin" ] || return 1
-  ip_args=$(speedtest_ookla_ip_args)
-  # shellcheck disable=SC2086
-  raw=$(speedtest_run_cmd "$bin" --accept-license --accept-gdpr $ip_args --format=json 2>&1) || true
-  speedtest_run_json_report "Ookla Speedtest" "$raw"
 }
 
 speedtest_run_legacy() {
