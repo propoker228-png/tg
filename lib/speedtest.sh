@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-SPEEDTEST_SH_VERSION="1.3"
+SPEEDTEST_SH_VERSION="1.4"
 SPEEDTEST_PROFILE_QUICK="quick"
 SPEEDTEST_PROFILE_FULL="full"
 
@@ -138,15 +138,46 @@ speedtest_profile_upload_mb() {
   esac
 }
 
+speedtest_dns_diagnose() {
+  local host v4=0 v6=0
+  for host in www.speedtest.net speedtest.net; do
+    getent ahostsv4 "$host" >/dev/null 2>&1 && v4=1
+    getent ahostsv6 "$host" >/dev/null 2>&1 && v6=1
+  done
+  if [ "$v4" -eq 0 ] && [ "$v6" -eq 1 ]; then
+    log_warn "speedtest.net резолвится только в IPv6 — speedtest-cli часто не работает"
+    log_warn "Проверьте: ping -4 speedtest.net  и  getent ahostsv4 www.speedtest.net"
+    return 1
+  fi
+  if [ "$v4" -eq 0 ] && [ "$v6" -eq 0 ]; then
+    log_warn "speedtest.net не резолвится — проверьте /etc/resolv.conf"
+    return 1
+  fi
+  return 0
+}
+
+speedtest_config_reachable() {
+  curl -4 -fsSL --max-time 10 "https://www.speedtest.net/speedtest-config.php" >/dev/null 2>&1
+}
+
+speedtest_mini_servers() {
+  printf '%s\n' \
+    'http://speedtest.tele2.net:8080/speedtest/upload.php' \
+    'http://speedtest.belwue.net:8080/speedtest/upload.php'
+}
+
 speedtest_explain_failure() {
   local raw="$1"
   if printf '%s\n' "$raw" | grep -qi 'name resolution'; then
-    log_warn "DNS не резолвит speedtest.net — speedtest-cli/Ookla недоступны"
-    log_warn "Проверьте /etc/resolv.conf (например: nameserver 1.1.1.1)"
+    speedtest_dns_diagnose >/dev/null 2>&1 || true
+    if ! speedtest_config_reachable; then
+      log_warn "speedtest-cli не может скачать speedtest-config.php по IPv4"
+    fi
     return 0
   fi
   if printf '%s\n' "$raw" | grep -qi 'Cannot retrieve speedtest configuration'; then
-    log_warn "speedtest-cli: не удалось получить список серверов (DNS или блокировка speedtest.net)"
+    speedtest_dns_diagnose >/dev/null 2>&1 || true
+    log_warn "speedtest-cli: не удалось получить список серверов (DNS, IPv4 или блокировка)"
     return 0
   fi
   speedtest_last_error_line "$raw"
@@ -180,9 +211,12 @@ speedtest_run_ookla() {
 }
 
 speedtest_run_legacy() {
-  local raw bin
+  local raw bin mini
   bin=$(speedtest_cli_bin)
   [ -n "$bin" ] || return 1
+  if ! speedtest_config_reachable; then
+    speedtest_dns_diagnose || true
+  fi
   raw=$(speedtest_run_cmd "$bin" --json 2>&1) || true
   if speedtest_run_json_report "speedtest-cli" "$raw"; then
     return 0
@@ -191,6 +225,13 @@ speedtest_run_legacy() {
   if speedtest_run_json_report "speedtest-cli" "$raw"; then
     return 0
   fi
+  while IFS= read -r mini; do
+    [ -n "$mini" ] || continue
+    raw=$(speedtest_run_cmd "$bin" --json --mini "$mini" 2>&1) || true
+    if speedtest_run_json_report "speedtest-cli (mini)" "$raw"; then
+      return 0
+    fi
+  done < <(speedtest_mini_servers)
   speedtest_explain_failure "$raw"
   return 1
 }
