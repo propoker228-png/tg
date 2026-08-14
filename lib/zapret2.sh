@@ -78,11 +78,13 @@ zapret2_download_binary() {
 
 zapret2_write_configs() {
   local port="${PROXY_PORT:-443}"
-  export ZAPRET2_DIR ZAPRET2_ETC_DIR ZAPRET2_QNUM PROXY_PORT="$port"
-  render_template "$DEPLOY_ROOT/templates/zapret2/mtproto.conf.tpl" \
-    "${ZAPRET2_ETC_DIR}/mtproto.conf"
-  render_template "$DEPLOY_ROOT/templates/zapret2/tg-zapret2-start.sh.tpl" \
-    "$ZAPRET2_START_SCRIPT"
+  export ZAPRET2_DIR ZAPRET2_ETC_DIR ZAPRET2_NFT_TABLE ZAPRET2_QNUM PROXY_PORT="$port"
+  envsubst '${ZAPRET2_QNUM} ${ZAPRET2_DIR} ${PROXY_PORT}' \
+    < "$DEPLOY_ROOT/templates/zapret2/mtproto.conf.tpl" \
+    > "${ZAPRET2_ETC_DIR}/mtproto.conf"
+  envsubst '${ZAPRET2_NFT_TABLE} ${ZAPRET2_DIR} ${ZAPRET2_ETC_DIR} ${ZAPRET2_QNUM} ${PROXY_PORT}' \
+    < "$DEPLOY_ROOT/templates/zapret2/tg-zapret2-start.sh.tpl" \
+    > "$ZAPRET2_START_SCRIPT"
   chmod +x "$ZAPRET2_START_SCRIPT"
   cp "$DEPLOY_ROOT/templates/zapret2/tg-zapret2.service" \
     "/etc/systemd/system/${ZAPRET2_SERVICE}"

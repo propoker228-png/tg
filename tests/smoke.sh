@@ -280,6 +280,24 @@ check_zapret2_templates() {
     && [ -f "$ROOT/templates/zapret2/tg-zapret2-start.sh.tpl" ]
 }
 
+check_zapret2_render() {
+  (
+    DEPLOY_ROOT="$ROOT"
+    ZAPRET2_DIR="/opt/tg-zapret2"
+    ZAPRET2_ETC_DIR="/etc/tg-zapret2"
+    ZAPRET2_NFT_TABLE="TgDeployZ2"
+    ZAPRET2_QNUM=200
+    PROXY_PORT=443
+    export DEPLOY_ROOT ZAPRET2_DIR ZAPRET2_ETC_DIR ZAPRET2_NFT_TABLE ZAPRET2_QNUM PROXY_PORT
+    tmp="$(mktemp)"
+    envsubst '${ZAPRET2_NFT_TABLE} ${ZAPRET2_DIR} ${ZAPRET2_ETC_DIR} ${ZAPRET2_QNUM} ${PROXY_PORT}' \
+      < "$ROOT/templates/zapret2/tg-zapret2-start.sh.tpl" > "$tmp"
+    grep -q 'TABLE="TgDeployZ2"' "$tmp"
+    ! grep -q 'ZAPRET2_NFT_TABLE' "$tmp"
+    rm -f "$tmp"
+  )
+}
+
 check_install_ip_only_from_domain() {
   (
     # shellcheck source=../lib/common.sh
@@ -355,6 +373,7 @@ check_cmd_ok "stub site resolver" check_stub_site_resolver
 check_cmd_ok "syn fix resolver" check_syn_fix_resolver
 check_cmd_ok "install step runner" check_install_step_runner
 check_cmd_ok "zapret2 templates present" check_zapret2_templates
+check_cmd_ok "zapret2 start script render" check_zapret2_render
 check_cmd_ok "tg template present" check_tg_template
 check_cmd_ok "confirm_action cli fallback" check_confirm_action_cli_fallback
 check_cmd_ok "prompts do not leak to stdout" check_prompt_stdout_clean
