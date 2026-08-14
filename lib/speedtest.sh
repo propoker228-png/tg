@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-SPEEDTEST_SH_VERSION="1.9"
+SPEEDTEST_SH_VERSION="1.10"
 SPEEDTEST_PROFILE_QUICK="quick"
 SPEEDTEST_PROFILE_FULL="full"
 SPEEDTEST_IP_FAMILY="${SPEEDTEST_IP_FAMILY:-}"
@@ -383,14 +383,20 @@ speedtest_run_json_report() {
   printf '%s\n' "$json" | speedtest_parse_json || return 1
 }
 
-speedtest_run_cmd() {
-  local bin="$1"
-  shift
-  if command -v timeout >/dev/null 2>&1; then
-    timeout 180 "$bin" "$@"
-  else
-    "$bin" "$@"
-  fi
+speedtest_curl_download() {
+  local url="$1" max_time="$2" result
+  result=$(speedtest_curl -fsSL -o /dev/null -w '%{time_total} %{size_download}' \
+    --max-time "$max_time" --retry 2 --retry-delay 1 "$url" 2>/dev/null) && { printf '%s' "$result"; return 0; }
+  result=$(curl -fsSL -o /dev/null -w '%{time_total} %{size_download}' \
+    --max-time "$max_time" --retry 2 --retry-delay 1 "$url" 2>/dev/null) && { printf '%s' "$result"; return 0; }
+  return 1
+}
+
+speedtest_curl_max_time() {
+  case "${1:-quick}" in
+    full|2) echo "180" ;;
+    *) echo "60" ;;
+  esac
 }
 
 speedtest_ookla_ip_args() {
@@ -419,40 +425,31 @@ speedtest_explain_ookla_failure() {
   speedtest_last_error_line "$raw"
 }
 
-speedtest_run_ookla_capture() {
-  local bin="$1" tmp raw
+speedtest_run_cmd() {
+  local bin="$1" limit=180
   shift
-  tmp=$(mktemp)
-  speedtest_run_cmd "$bin" "$@" -o "$tmp" >/dev/null 2>&1 || true
-  if [ -s "$tmp" ] && speedtest_extract_json <"$tmp" >/dev/null 2>&1; then
-    cat "$tmp"
-    rm -f "$tmp"
-    return 0
+  [ "$(basename "$bin")" = "speedtest" ] && limit=300
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$limit" "$bin" "$@"
+  else
+    "$bin" "$@"
   fi
-  raw=$(speedtest_run_cmd "$bin" "$@" 2>&1) || true
-  rm -f "$tmp"
-  if [ -n "$raw" ] && printf '%s\n' "$raw" | speedtest_extract_json >/dev/null 2>&1; then
-    printf '%s\n' "$raw"
-    return 0
-  fi
-  [ -n "$raw" ] && printf '%s\n' "$raw"
-  return 1
 }
 
 speedtest_run_ookla() {
-  local raw bin ip_args extra
+  local raw bin tmp
   bin=$(speedtest_cli_bin)
   [ -n "$bin" ] || return 1
-  ip_args=$(speedtest_ookla_ip_args)
-  for extra in \
-    "--accept-license --accept-gdpr -f json" \
-    "--accept-license --accept-gdpr --format json"
-  do
-    # shellcheck disable=SC2086
-    raw=$(speedtest_run_ookla_capture "$bin" $extra $ip_args) && speedtest_run_json_report "Ookla Speedtest" "$raw" && return 0
-    # shellcheck disable=SC2086
-    raw=$(speedtest_run_ookla_capture "$bin" $extra) && speedtest_run_json_report "Ookla Speedtest" "$raw" && return 0
-  done
+  tmp=$(mktemp)
+  speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json -o "$tmp" 2>/dev/null || true
+  if [ -s "$tmp" ] && speedtest_extract_json <"$tmp" >/dev/null 2>&1; then
+    raw=$(cat "$tmp")
+    rm -f "$tmp"
+    speedtest_run_json_report "Ookla Speedtest" "$raw" && return 0
+  fi
+  raw=$(speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json 2>&1) || true
+  rm -f "$tmp"
+  speedtest_run_json_report "Ookla Speedtest" "$raw" && return 0
   speedtest_explain_ookla_failure "$raw"
   return 1
 }
@@ -506,31 +503,32 @@ speedtest_fallback_urls() {
   case "$profile" in
     full|2)
       printf '%s\n' \
-        'https://speed.cloudflare.com/__down?bytes=100000000' \
         'https://proof.ovh.net/files/100Mb.dat' \
-        'https://speed.hetzner.de/100MB.bin'
+        'https://speed.cloudflare.com/__down?bytes=100000000' \
+        'https://speed.cloudflare.com/__down?bytes=52428800'
       ;;
     *)
       printf '%s\n' \
-        'https://speed.cloudflare.com/__down?bytes=10485760' \
-        'https://proof.ovh.net/files/10Mb.dat'
+        'https://proof.ovh.net/files/10Mb.dat' \
+        'https://speed.cloudflare.com/__down?bytes=10485760'
       ;;
   esac
 }
 
 speedtest_run_fallback_download() {
-  local profile="$1" url result time bytes mbit
+  local profile="$1" url result time bytes mbit max_time
+  max_time=$(speedtest_curl_max_time "$profile")
   echo -e "${BOLD}Режим: упрощённый (curl/Cloudflare, $(speedtest_ip_family_label))${NC}"
   while IFS= read -r url; do
     [ -n "$url" ] || continue
-    result=$(speedtest_curl -fsSL -o /dev/null -w '%{time_total} %{size_download}' --max-time 60 "$url" 2>/dev/null) || continue
+    result=$(speedtest_curl_download "$url" "$max_time") || continue
     time="${result%% *}"
     bytes="${result##* }"
     mbit=$(speedtest_format_mbit "$bytes" "$time")
     echo "Download:  ${mbit} Mbit/s  (${url})"
     return 0
   done < <(speedtest_fallback_urls "$profile")
-  log_err "Не удалось скачать тестовый файл — проверьте сеть и firewall"
+  log_warn "Download: не удалось скачать тестовый файл — проверьте сеть и firewall"
   return 1
 }
 
@@ -557,7 +555,7 @@ speedtest_run_fallback_ping() {
 }
 
 run_speedtest() {
-  local profile="${1:-quick}"
+  local profile="${1:-quick}" dl_ok=0
   speedtest_detect_ip_family
   log_warn "Тест использует интернет-трафик ($(speedtest_ip_family_label), полный режим 1–2 мин)"
   if speedtest_is_ookla_installed || speedtest_install_ookla; then
@@ -568,9 +566,10 @@ run_speedtest() {
     speedtest_run_legacy && return 0
     log_warn "Переключаюсь на упрощённый режим (curl + Cloudflare upload, $(speedtest_ip_family_label))"
   fi
-  speedtest_run_fallback_download "$profile" || return 1
+  speedtest_run_fallback_download "$profile" && dl_ok=1
   speedtest_run_fallback_upload "$profile" || true
   speedtest_run_fallback_ping
+  [ "$dl_ok" -eq 1 ] || return 1
 }
 
 # Backward-compatible aliases for smoke tests

@@ -44,4 +44,7 @@ SPEEDTEST_IP_FAMILY=4
 SPEEDTEST_IP_FAMILY=6
 [ "$(speedtest_ip_family_label)" = "IPv6" ] && pass "ip family label v6" || fail "ip family label v6"
 
+r=$(speedtest_curl_max_time full)
+[ "$r" = "180" ] && pass "curl max time full" || fail "curl max time full got=$r"
+
 exit "$FAIL"
