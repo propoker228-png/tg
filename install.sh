@@ -247,10 +247,13 @@ require_lib_bundle() {
     echo "[X] Отсутствует lib/access_limits.sh (v1.0)" >&2
     missing=1
   fi
-  if [ "${SPEEDTEST_SH_VERSION:-}" != "1.13" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.12" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.11" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.10" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.0" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.1" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.2" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.3" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.4" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.5" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.6" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.7" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.8" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.9" ]; then
-    echo "[X] Отсутствует lib/speedtest.sh (v1.0)" >&2
-    missing=1
-  fi
+  case "${SPEEDTEST_SH_VERSION:-}" in
+    1.0|1.1|1.2|1.3|1.4|1.5|1.6|1.7|1.8|1.9|1.10|1.11|1.12|1.13|1.14|1.15|1.16) ;;
+    *)
+      echo "[X] Устаревший lib/speedtest.sh (найден v${SPEEDTEST_SH_VERSION:-?}, нужен v1.0–1.16) — git pull в каталоге репозитория" >&2
+      missing=1
+      ;;
+  esac
   if [ "${DIALOG_SH_VERSION:-}" != "1.0" ]; then
     echo "[X] Отсутствует lib/dialog.sh (v1.0) — скопируйте lib/dialog.sh на сервер" >&2
     missing=1
