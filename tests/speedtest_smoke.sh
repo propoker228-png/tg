@@ -55,4 +55,11 @@ jsonl=$'{"type":"log","message":"test"}\n{"type":"result","download":{"bandwidth
 out=$(printf '%s' "$jsonl" | speedtest_extract_json | speedtest_parse_json)
 echo "$out" | grep -q 'Download:.*100.0 Mbit/s' && pass "parse ookla jsonl" || fail "parse ookla jsonl"
 
+log_only='{"type":"log","message":"Configuration - Could not retrieve or read configuration (ConfigurationError)"}'
+if printf '%s' "$log_only" | speedtest_extract_json >/dev/null 2>&1; then
+  fail "extract rejects log-only json"
+else
+  pass "extract rejects log-only json"
+fi
+
 exit "$FAIL"

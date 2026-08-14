@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-SPEEDTEST_SH_VERSION="1.16"
+SPEEDTEST_SH_VERSION="1.17"
 SPEEDTEST_PROFILE_QUICK="quick"
 SPEEDTEST_PROFILE_FULL="full"
 SPEEDTEST_IP_FAMILY="${SPEEDTEST_IP_FAMILY:-}"
@@ -94,6 +94,22 @@ speedtest_ping_targets() {
 speedtest_extract_json() {
   # python3 -c (not heredoc): heredoc steals stdin and breaks piped input
   python3 -c 'import json, sys
+
+def is_valid_result(data):
+    if not isinstance(data, dict):
+        return False
+    if data.get("type") == "log":
+        return False
+    dl = data.get("download")
+    ul = data.get("upload")
+    if isinstance(dl, dict):
+        return (dl.get("bandwidth") or 0) > 0 or (
+            isinstance(ul, dict) and (ul.get("bandwidth") or 0) > 0
+        )
+    if isinstance(dl, (int, float)):
+        return dl > 0 or (isinstance(ul, (int, float)) and ul > 0)
+    return False
+
 text = sys.stdin.read()
 for line in text.splitlines():
     line = line.strip()
@@ -103,9 +119,7 @@ for line in text.splitlines():
         data = json.loads(line)
     except json.JSONDecodeError:
         continue
-    if not isinstance(data, dict):
-        continue
-    if data.get("type") == "result" or isinstance(data.get("download"), dict):
+    if is_valid_result(data):
         json.dump(data, sys.stdout)
         sys.exit(0)
 start = text.find("{")
@@ -116,7 +130,7 @@ try:
     data = json.loads(text[start : end + 1])
 except json.JSONDecodeError:
     sys.exit(1)
-if not isinstance(data, dict):
+if not is_valid_result(data):
     sys.exit(1)
 json.dump(data, sys.stdout)'
 }
@@ -160,6 +174,9 @@ else:
     loc = srv.get("name") or srv.get("country") or "н/д"
     client = data.get("client", {})
     isp = client.get("isp") or "н/д"
+
+if dl <= 0 and ul <= 0:
+    sys.exit(1)
 
 print(f"Download:  {dl:.1f} Mbit/s")
 print(f"Upload:    {ul:.1f} Mbit/s")
@@ -477,6 +494,10 @@ speedtest_explain_ookla_failure() {
   local raw="$1"
   if [ -z "$raw" ]; then
     log_warn "Ookla: пустой ответ (таймаут или блокировка серверов speedtest.net)"
+    return 0
+  fi
+  if printf '%s\n' "$raw" | grep -qi 'Failed binding local connection\|ConfigurationError\|Cannot retrieve configuration'; then
+    log_warn "Ookla: ошибка конфигурации/сокета speedtest.net — пробую повтор или curl"
     return 0
   fi
   if printf '%s\n' "$raw" | grep -qi 'name resolution\|Cannot connect\|Connection refused\|timed out'; then
