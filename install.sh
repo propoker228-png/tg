@@ -446,7 +446,11 @@ fi
 
 if [ "$UNINSTALL" -eq 1 ]; then
   if ! is_auto_mode; then
-    confirm_yes "Удалить установленный стек telemt-deploy?" || die "Удаление отменено"
+    if [ "$PURGE" -eq 1 ]; then
+      confirm_yes "ПОЛНОЕ удаление: секрет и SSL будут уничтожены. Продолжить?" || die "Отменено"
+    else
+      confirm_yes "Удалить установленный стек telemt-deploy?" || die "Удаление отменено"
+    fi
   fi
   uninstall_all
   exit 0

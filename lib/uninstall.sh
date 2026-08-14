@@ -3,8 +3,30 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 # shellcheck source=zapret2.sh
 source "$(dirname "${BASH_SOURCE[0]}")/zapret2.sh"
 
+uninstall_stop_extra_units() {
+  systemctl stop telemt-panel telemt-agent.timer telemt-agent haproxy 2>/dev/null || true
+  systemctl disable telemt-panel telemt-agent.timer telemt-agent haproxy 2>/dev/null || true
+  rm -f /etc/systemd/system/telemt-panel.service \
+        /etc/systemd/system/telemt-agent.service \
+        /etc/systemd/system/telemt-agent.timer
+}
+
+uninstall_purge_extras() {
+  env_load_settings 2>/dev/null || true
+  rm -f "$SECRET_FILE"
+  rm -f /etc/telemt-deploy.cluster
+  rm -rf /opt/telemt /opt/telemt-panel
+  rm -rf /var/www/telemt-stub-* 2>/dev/null || true
+  if [ -n "${DOMAIN:-}" ] && command -v certbot >/dev/null 2>&1; then
+    certbot delete --cert-name "$DOMAIN" --non-interactive 2>/dev/null || true
+  fi
+  log_warn "Purge: секрет и сертификаты удалены"
+}
+
 uninstall_all() {
   log_warn "Удаление telemt-deploy стека..."
+
+  uninstall_stop_extra_units
 
   systemctl stop telemt mtpr-synfix tg-zapret2 2>/dev/null || true
   systemctl disable telemt mtpr-synfix tg-zapret2 2>/dev/null || true
@@ -47,8 +69,11 @@ uninstall_all() {
     fi
   fi
 
-  # SECRET_FILE и letsencrypt оставляем
-
   systemctl daemon-reload
+
+  if [ "${PURGE:-0}" -eq 1 ]; then
+    uninstall_purge_extras
+  fi
+
   log_ok "Удаление завершено"
 }
