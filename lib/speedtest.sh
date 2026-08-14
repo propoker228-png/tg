@@ -23,10 +23,31 @@ speedtest_profile_bytes() {
   esac
 }
 
-speedtest_parse_ookla_json() {
-  python3 - "$1" <<'PY'
+speedtest_extract_ookla_json() {
+  python3 <<'PY'
 import json, sys
-data = json.loads(sys.argv[1])
+text = sys.stdin.read()
+start = text.find("{")
+end = text.rfind("}")
+if start == -1 or end <= start:
+    sys.exit(1)
+try:
+    data = json.loads(text[start : end + 1])
+except json.JSONDecodeError:
+    sys.exit(1)
+if not isinstance(data, dict):
+    sys.exit(1)
+json.dump(data)
+PY
+}
+
+speedtest_parse_ookla_json() {
+  python3 <<'PY'
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except json.JSONDecodeError:
+    sys.exit(1)
 dl = data.get("download", {}).get("bandwidth", 0) * 8 / 1_000_000
 ul = data.get("upload", {}).get("bandwidth", 0) * 8 / 1_000_000
 ping = data.get("ping", {})
@@ -67,10 +88,11 @@ speedtest_install_ookla() {
 }
 
 speedtest_run_ookla() {
-  local json
-  json=$(speedtest --accept-license --accept-gdpr --format=json 2>/dev/null) || return 1
+  local raw json
+  raw=$(speedtest --accept-license --accept-gdpr --format=json 2>&1) || return 1
+  json=$(printf '%s\n' "$raw" | speedtest_extract_ookla_json) || return 1
   echo -e "${BOLD}Режим: Ookla Speedtest${NC}"
-  speedtest_parse_ookla_json "$json"
+  printf '%s\n' "$json" | speedtest_parse_ookla_json || return 1
 }
 
 speedtest_fallback_urls() {
