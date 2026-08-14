@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-SPEEDTEST_SH_VERSION="1.11"
+SPEEDTEST_SH_VERSION="1.12"
 SPEEDTEST_PROFILE_QUICK="quick"
 SPEEDTEST_PROFILE_FULL="full"
 SPEEDTEST_IP_FAMILY="${SPEEDTEST_IP_FAMILY:-}"
@@ -95,6 +95,19 @@ speedtest_extract_json() {
   python3 <<'PY'
 import json, sys
 text = sys.stdin.read()
+for line in text.splitlines():
+    line = line.strip()
+    if not line.startswith("{"):
+        continue
+    try:
+        data = json.loads(line)
+    except json.JSONDecodeError:
+        continue
+    if not isinstance(data, dict):
+        continue
+    if data.get("type") == "result" or isinstance(data.get("download"), dict):
+        json.dump(data)
+        sys.exit(0)
 start = text.find("{")
 end = text.rfind("}")
 if start == -1 or end <= start:
@@ -379,7 +392,7 @@ speedtest_is_interactive() {
 }
 
 speedtest_log_step() {
-  echo -e "${BOLD}[*]${NC} $*"
+  echo -e "${BOLD}[*]${NC} $*" >&2
 }
 
 speedtest_parse_ookla_human() {
@@ -437,6 +450,10 @@ speedtest_curl_download() {
   return 1
 }
 
+speedtest_curl_valid_result() {
+  [[ "${1:-}" =~ ^[0-9.]+[[:space:]]+[0-9]+$ ]]
+}
+
 speedtest_curl_max_time() {
   case "${1:-quick}" in
     full|2) echo "180" ;;
@@ -490,7 +507,7 @@ speedtest_run_ookla() {
 
   speedtest_log_step "Ookla Speedtest ($(speedtest_ip_family_label)): замер download/upload/ping (1–3 мин)..."
 
-  if speedtest_is_interactive; then
+  if speedtest_is_interactive && speedtest_config_reachable; then
     speedtest_run_cmd "$bin" --accept-license --accept-gdpr 2>&1 | tee "$logf" >/dev/stderr || true
     if human_out=$(speedtest_parse_ookla_human <"$logf" 2>/dev/null); then
       echo ""
@@ -501,26 +518,29 @@ speedtest_run_ookla() {
     fi
     echo ""
     speedtest_log_step "Ookla: повтор в формате JSON..."
+  elif speedtest_is_interactive; then
+    speedtest_log_step "Ookla: JSON (конфиг speedtest.net недоступен, прямой замер)..."
   fi
 
   if speedtest_is_interactive; then
-    speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json -o "$tmp" 2>&1 | tee /dev/stderr >/dev/null || true
+    speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json 2>&1 | tee "$logf" >/dev/stderr || true
   else
-    speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json -o "$tmp" 2>/dev/null || true
+    speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json >"$logf" 2>/dev/null || true
   fi
+  raw=$(cat "$logf")
+  if speedtest_run_json_report "Ookla Speedtest" "$raw"; then
+    rm -f "$tmp" "$logf"
+    return 0
+  fi
+
+  speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json -o "$tmp" 2>/dev/null || true
   if [ -s "$tmp" ] && speedtest_extract_json <"$tmp" >/dev/null 2>&1; then
     raw=$(cat "$tmp")
     rm -f "$tmp" "$logf"
     speedtest_run_json_report "Ookla Speedtest" "$raw" && return 0
   fi
 
-  if speedtest_is_interactive; then
-    raw=$(speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json 2>&1 | tee /dev/stderr) || true
-  else
-    raw=$(speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json 2>&1) || true
-  fi
   rm -f "$tmp" "$logf"
-  speedtest_run_json_report "Ookla Speedtest" "$raw" && return 0
   speedtest_explain_ookla_failure "$raw"
   return 1
 }
@@ -603,6 +623,8 @@ speedtest_run_fallback_download() {
   while IFS= read -r url; do
     [ -n "$url" ] || continue
     result=$(speedtest_curl_download "$url" "$max_time") || continue
+    speedtest_curl_valid_result "$result" || continue
+    echo "" >&2
     time="${result%% *}"
     bytes="${result##* }"
     mbit=$(speedtest_format_mbit "$bytes" "$time")

@@ -51,4 +51,8 @@ sample=$'   Speedtest by Ookla\n\n      Server: Amsterdam\n         ISP: Test IS
 out=$(printf '%s' "$sample" | speedtest_parse_ookla_human)
 echo "$out" | grep -q 'Download:.*935.55 Mbps' && pass "parse ookla human download" || fail "parse ookla human download"
 
+jsonl=$'{"type":"log","message":"test"}\n{"type":"result","download":{"bandwidth":12500000},"upload":{"bandwidth":6250000},"ping":{"latency":12.4,"jitter":1.2},"server":{"name":"Test","location":"Amsterdam"},"isp":"Test ISP"}\n'
+out=$(printf '%s' "$jsonl" | speedtest_extract_json | speedtest_parse_json)
+echo "$out" | grep -q 'Download:.*100.0 Mbit/s' && pass "parse ookla jsonl" || fail "parse ookla jsonl"
+
 exit "$FAIL"
