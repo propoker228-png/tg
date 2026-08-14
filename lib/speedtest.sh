@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-SPEEDTEST_SH_VERSION="1.10"
+SPEEDTEST_SH_VERSION="1.11"
 SPEEDTEST_PROFILE_QUICK="quick"
 SPEEDTEST_PROFILE_FULL="full"
 SPEEDTEST_IP_FAMILY="${SPEEDTEST_IP_FAMILY:-}"
@@ -374,6 +374,43 @@ speedtest_explain_failure() {
   speedtest_last_error_line "$raw"
 }
 
+speedtest_is_interactive() {
+  [ -t 1 ] || { [ -e /dev/tty ] 2>/dev/null && [ -r /dev/tty ]; }
+}
+
+speedtest_log_step() {
+  echo -e "${BOLD}[*]${NC} $*"
+}
+
+speedtest_parse_ookla_human() {
+  python3 <<'PY'
+import re, sys
+text = sys.stdin.read()
+if not text.strip():
+    sys.exit(1)
+
+def grab(label, pat):
+    m = re.search(pat, text, re.I | re.M)
+    return m.group(1).strip() if m else ""
+
+dl = grab("dl", r"Download:\s*([0-9][^\n]*)")
+ul = grab("ul", r"Upload:\s*([0-9][^\n]*)")
+lat = grab("lat", r"Latency:\s*([0-9][^\n]*)")
+jit = grab("jit", r"Jitter:\s*([0-9][^\n]*)")
+srv = grab("srv", r"Server:\s*([^\n]+)")
+isp = grab("isp", r"ISP:\s*([^\n]+)")
+if not dl:
+    sys.exit(1)
+print(f"Download:  {dl}")
+print(f"Upload:    {ul or 'н/д'}")
+print(f"Ping:      {lat or 'н/д'}")
+if jit:
+    print(f"Jitter:    {jit}")
+print(f"Server:    {srv or 'н/д'}")
+print(f"ISP:       {isp or 'н/д'}")
+PY
+}
+
 speedtest_run_json_report() {
   local mode_label="$1" raw json
   raw="$2"
@@ -385,6 +422,14 @@ speedtest_run_json_report() {
 
 speedtest_curl_download() {
   local url="$1" max_time="$2" result
+  speedtest_log_step "Download: ${url}"
+  if speedtest_is_interactive; then
+    result=$(speedtest_curl --progress-bar -o /dev/null -w '%{time_total} %{size_download}' \
+      --max-time "$max_time" --retry 2 --retry-delay 1 "$url" 2>/dev/tty) && { printf '%s' "$result"; return 0; }
+    result=$(curl -f --progress-bar -o /dev/null -w '%{time_total} %{size_download}' \
+      --max-time "$max_time" --retry 2 --retry-delay 1 "$url" 2>/dev/tty) && { printf '%s' "$result"; return 0; }
+    return 1
+  fi
   result=$(speedtest_curl -fsSL -o /dev/null -w '%{time_total} %{size_download}' \
     --max-time "$max_time" --retry 2 --retry-delay 1 "$url" 2>/dev/null) && { printf '%s' "$result"; return 0; }
   result=$(curl -fsSL -o /dev/null -w '%{time_total} %{size_download}' \
@@ -437,18 +482,44 @@ speedtest_run_cmd() {
 }
 
 speedtest_run_ookla() {
-  local raw bin tmp
+  local raw bin tmp logf human_out
   bin=$(speedtest_cli_bin)
   [ -n "$bin" ] || return 1
   tmp=$(mktemp)
-  speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json -o "$tmp" 2>/dev/null || true
+  logf=$(mktemp)
+
+  speedtest_log_step "Ookla Speedtest ($(speedtest_ip_family_label)): замер download/upload/ping (1–3 мин)..."
+
+  if speedtest_is_interactive; then
+    speedtest_run_cmd "$bin" --accept-license --accept-gdpr 2>&1 | tee "$logf" >/dev/stderr || true
+    if human_out=$(speedtest_parse_ookla_human <"$logf" 2>/dev/null); then
+      echo ""
+      echo -e "${BOLD}Режим: Ookla Speedtest ($(speedtest_ip_family_label))${NC}"
+      echo "$human_out"
+      rm -f "$tmp" "$logf"
+      return 0
+    fi
+    echo ""
+    speedtest_log_step "Ookla: повтор в формате JSON..."
+  fi
+
+  if speedtest_is_interactive; then
+    speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json -o "$tmp" 2>&1 | tee /dev/stderr >/dev/null || true
+  else
+    speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json -o "$tmp" 2>/dev/null || true
+  fi
   if [ -s "$tmp" ] && speedtest_extract_json <"$tmp" >/dev/null 2>&1; then
     raw=$(cat "$tmp")
-    rm -f "$tmp"
+    rm -f "$tmp" "$logf"
     speedtest_run_json_report "Ookla Speedtest" "$raw" && return 0
   fi
-  raw=$(speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json 2>&1) || true
-  rm -f "$tmp"
+
+  if speedtest_is_interactive; then
+    raw=$(speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json 2>&1 | tee /dev/stderr) || true
+  else
+    raw=$(speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json 2>&1) || true
+  fi
+  rm -f "$tmp" "$logf"
   speedtest_run_json_report "Ookla Speedtest" "$raw" && return 0
   speedtest_explain_ookla_failure "$raw"
   return 1
@@ -461,18 +532,27 @@ speedtest_legacy_bind_args() {
 }
 
 speedtest_run_legacy() {
-  local raw bin mini bind
+  local raw bin mini bind logf
   bin=$(speedtest_cli_bin)
   [ -n "$bin" ] || return 1
   bind=$(speedtest_legacy_bind_args)
   if ! speedtest_config_reachable; then
     speedtest_dns_diagnose || true
   fi
+  speedtest_log_step "speedtest-cli: замер download/upload/ping..."
+  logf=$(mktemp)
   # shellcheck disable=SC2086
-  raw=$(speedtest_run_cmd "$bin" $bind --json 2>&1) || true
+  if speedtest_is_interactive; then
+    speedtest_run_cmd "$bin" $bind --json 2>&1 | tee "$logf" >/dev/stderr || true
+    raw=$(cat "$logf")
+  else
+    raw=$(speedtest_run_cmd "$bin" $bind --json 2>&1) || true
+  fi
+  rm -f "$logf"
   if speedtest_run_json_report "speedtest-cli" "$raw"; then
     return 0
   fi
+  speedtest_log_step "speedtest-cli: повтор через HTTPS..."
   # shellcheck disable=SC2086
   raw=$(speedtest_run_cmd "$bin" $bind --json --secure 2>&1) || true
   if speedtest_run_json_report "speedtest-cli" "$raw"; then
@@ -480,6 +560,7 @@ speedtest_run_legacy() {
   fi
   while IFS= read -r mini; do
     [ -n "$mini" ] || continue
+    speedtest_log_step "speedtest-cli mini: ${mini}"
     # shellcheck disable=SC2086
     raw=$(speedtest_run_cmd "$bin" $bind --json --mini "$mini" 2>&1) || true
     if speedtest_run_json_report "speedtest-cli (mini)" "$raw"; then
@@ -537,16 +618,27 @@ speedtest_run_fallback_upload() {
   mb=$(speedtest_profile_upload_mb "$profile")
   bytes=$((mb * 1048576))
   url="https://speed.cloudflare.com/__up"
-  time=$(dd if=/dev/zero bs=1M count="$mb" 2>/dev/null | speedtest_curl -fsSL -o /dev/null -w '%{time_total}' --max-time 120 -X POST -H "Content-Type: application/octet-stream" --data-binary @- "$url" 2>/dev/null) || {
-    echo "Upload:    н/д (cloudflare недоступен по $(speedtest_ip_family_label))"
-    return 1
-  }
+  speedtest_log_step "Upload: ~${mb} MB → ${url}"
+  if speedtest_is_interactive; then
+    time=$(dd if=/dev/zero bs=1M count="$mb" 2>/dev/null | speedtest_curl --progress-bar -o /dev/null -w '%{time_total}' \
+      --max-time 120 -X POST -H "Content-Type: application/octet-stream" --data-binary @- "$url" 2>/dev/tty) || {
+      echo "Upload:    н/д (cloudflare недоступен по $(speedtest_ip_family_label))"
+      return 1
+    }
+  else
+    time=$(dd if=/dev/zero bs=1M count="$mb" 2>/dev/null | speedtest_curl -fsSL -o /dev/null -w '%{time_total}' \
+      --max-time 120 -X POST -H "Content-Type: application/octet-stream" --data-binary @- "$url" 2>/dev/null) || {
+      echo "Upload:    н/д (cloudflare недоступен по $(speedtest_ip_family_label))"
+      return 1
+    }
+  fi
   mbit=$(speedtest_format_mbit "$bytes" "$time")
   echo "Upload:    ${mbit} Mbit/s  (${url}, ~${mb} MB)"
 }
 
 speedtest_run_fallback_ping() {
   local host avg
+  speedtest_log_step "Ping..."
   while IFS= read -r host; do
     if avg=$(ping -"${SPEEDTEST_IP_FAMILY:-4}" -c 4 -W 2 "$host" 2>/dev/null | awk -F'/' '/^rtt|^round-trip/ {print $5}'); then
       [ -n "$avg" ] && echo "Ping (${host}): ${avg} ms (avg)"

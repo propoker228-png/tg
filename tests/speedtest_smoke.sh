@@ -47,4 +47,8 @@ SPEEDTEST_IP_FAMILY=6
 r=$(speedtest_curl_max_time full)
 [ "$r" = "180" ] && pass "curl max time full" || fail "curl max time full got=$r"
 
+sample=$'   Speedtest by Ookla\n\n      Server: Amsterdam\n         ISP: Test ISP\n    Latency: 12.4 ms\n   Download: 935.55 Mbps\n     Upload: 537.7 Mbps\n'
+out=$(printf '%s' "$sample" | speedtest_parse_ookla_human)
+echo "$out" | grep -q 'Download:.*935.55 Mbps' && pass "parse ookla human download" || fail "parse ookla human download"
+
 exit "$FAIL"
