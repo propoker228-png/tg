@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-SPEEDTEST_SH_VERSION="1.5"
+SPEEDTEST_SH_VERSION="1.6"
 SPEEDTEST_PROFILE_QUICK="quick"
 SPEEDTEST_PROFILE_FULL="full"
 SPEEDTEST_IP_FAMILY="${SPEEDTEST_IP_FAMILY:-}"
@@ -156,47 +156,128 @@ print(f"ISP:       {isp}")
 PY
 }
 
+speedtest_is_ookla_bin() {
+  local bin="$1" version help
+  [ -n "$bin" ] && [ -x "$bin" ] || return 1
+  version=$("$bin" --version 2>&1 || true)
+  if printf '%s\n' "$version" | grep -qi 'ookla'; then
+    return 0
+  fi
+  help=$("$bin" --help 2>&1 || true)
+  printf '%s\n' "$help" | grep -qE '(^|[[:space:]])--format=json'
+}
+
+speedtest_is_ookla_installed() {
+  local bin
+  for bin in /usr/bin/speedtest /usr/local/bin/speedtest; do
+    speedtest_is_ookla_bin "$bin" && return 0
+  done
+  bin=$(command -v speedtest 2>/dev/null || true)
+  speedtest_is_ookla_bin "$bin"
+}
+
+speedtest_is_legacy_installed() {
+  local bin help
+  speedtest_is_ookla_installed && return 1
+  for bin in /usr/bin/speedtest /usr/bin/speedtest-cli /usr/local/bin/speedtest /usr/local/bin/speedtest-cli; do
+    [ -x "$bin" ] || continue
+    help=$("$bin" --help 2>&1 || true)
+    if printf '%s\n' "$help" | grep -qE '(^|[[:space:]])--json'; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 speedtest_cli_bin() {
+  local bin
+  for bin in /usr/bin/speedtest /usr/local/bin/speedtest; do
+    speedtest_is_ookla_bin "$bin" && echo "$bin" && return 0
+  done
   command -v speedtest 2>/dev/null || command -v speedtest-cli 2>/dev/null || true
 }
 
 speedtest_detect_backend() {
-  local help version bin
-  bin=$(speedtest_cli_bin)
-  [ -n "$bin" ] || return 1
-  version=$("$bin" --version 2>&1 || true)
-  if printf '%s\n' "$version" | grep -qi 'ookla'; then
+  if speedtest_is_ookla_installed; then
     echo "ookla"
     return 0
   fi
-  help=$("$bin" --help 2>&1 || true)
-  if printf '%s\n' "$help" | grep -qE '(^|[[:space:]])--format=json'; then
-    echo "ookla"
-    return 0
-  fi
-  if printf '%s\n' "$help" | grep -qE '(^|[[:space:]])--json'; then
+  if speedtest_is_legacy_installed; then
     echo "legacy"
     return 0
   fi
   return 1
 }
 
-speedtest_install_ookla() {
-  if speedtest_detect_backend >/dev/null 2>&1; then
-    return 0
-  fi
-  if ! is_auto_mode; then
-    confirm_action "Установить Ookla Speedtest CLI для полного теста (download/upload/ping)?" || return 1
-  fi
+speedtest_apt_pkg_installed() {
+  dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q "install ok installed"
+}
+
+speedtest_remove_legacy() {
+  local pkg removed=0
   export DEBIAN_FRONTEND=noninteractive
   if command -v apt-get >/dev/null 2>&1; then
-    curl -fsSL https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.deb.sh | bash
-    apt-get install -y speedtest
-  else
+    for pkg in speedtest-cli python3-speedtest-cli; do
+      if speedtest_apt_pkg_installed "$pkg"; then
+        log_warn "Удаляю пакет $pkg"
+        apt-get purge -y "$pkg" >/dev/null 2>&1 || apt-get remove -y "$pkg" >/dev/null 2>&1 || true
+        removed=1
+      fi
+    done
+    if speedtest_apt_pkg_installed speedtest && ! speedtest_is_ookla_installed; then
+      local help
+      help=$(speedtest --help 2>&1 || true)
+      if printf '%s\n' "$help" | grep -qE '(^|[[:space:]])--json'; then
+        log_warn "Удаляю пакет speedtest (устаревший speedtest-cli)"
+        apt-get purge -y speedtest >/dev/null 2>&1 || apt-get remove -y speedtest >/dev/null 2>&1 || true
+        removed=1
+      fi
+    fi
+  fi
+  if command -v pip3 >/dev/null 2>&1; then
+    pip3 uninstall -y speedtest-cli speedtest 2>/dev/null && removed=1 || true
+  fi
+  rm -f /usr/local/bin/speedtest-cli 2>/dev/null || true
+  hash -r 2>/dev/null || true
+  [ "$removed" -eq 1 ] && log_ok "Старый speedtest-cli удалён"
+}
+
+speedtest_install_ookla_pkg() {
+  export DEBIAN_FRONTEND=noninteractive
+  if ! command -v apt-get >/dev/null 2>&1; then
     log_warn "apt недоступен — Ookla не установлен"
     return 1
   fi
-  speedtest_detect_backend >/dev/null 2>&1
+  if [ ! -f /etc/apt/sources.list.d/ookla_speedtest-cli.list ] \
+    && [ ! -f /etc/apt/sources.list.d/ookla-speedtest-cli.list ]; then
+    curl -fsSL https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.deb.sh | bash
+  fi
+  apt-get update -qq
+  apt-get install -y speedtest
+  hash -r 2>/dev/null || true
+  speedtest_is_ookla_installed
+}
+
+speedtest_install_ookla() {
+  if speedtest_is_ookla_installed; then
+    return 0
+  fi
+  if speedtest_is_legacy_installed; then
+    if ! is_auto_mode; then
+      confirm_action "Заменить устаревший speedtest-cli на официальный Ookla Speedtest?" || return 1
+    else
+      log_warn "Заменяю устаревший speedtest-cli на Ookla Speedtest"
+    fi
+    speedtest_remove_legacy
+  elif ! is_auto_mode; then
+    confirm_action "Установить Ookla Speedtest CLI для полного теста (download/upload/ping)?" || return 1
+  fi
+  if speedtest_install_ookla_pkg; then
+    log_ok "Ookla Speedtest установлен: $(speedtest --version 2>&1 | head -1)"
+    return 0
+  fi
+  log_warn "Не удалось установить Ookla Speedtest"
+  return 1
 }
 
 speedtest_config_reachable() {
@@ -391,8 +472,12 @@ run_speedtest() {
   local profile="${1:-quick}"
   speedtest_detect_ip_family
   log_warn "Тест использует интернет-трафик ($(speedtest_ip_family_label), полный режим 1–2 мин)"
-  if speedtest_detect_backend >/dev/null 2>&1 || speedtest_install_ookla; then
+  if speedtest_is_ookla_installed || speedtest_install_ookla; then
     speedtest_run_full && return 0
+    log_warn "Ookla Speedtest не ответил — переключаюсь на упрощённый режим (curl + Cloudflare upload, $(speedtest_ip_family_label))"
+  elif speedtest_is_legacy_installed; then
+    log_warn "Установлен устаревший speedtest-cli — для полного теста выберите замену на Ookla"
+    speedtest_run_legacy && return 0
     log_warn "Переключаюсь на упрощённый режим (curl + Cloudflare upload, $(speedtest_ip_family_label))"
   fi
   speedtest_run_fallback_download "$profile" || return 1
