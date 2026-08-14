@@ -247,7 +247,7 @@ require_lib_bundle() {
     echo "[X] Отсутствует lib/access_limits.sh (v1.0)" >&2
     missing=1
   fi
-  if [ "${SPEEDTEST_SH_VERSION:-}" != "1.12" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.11" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.10" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.0" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.1" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.2" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.3" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.4" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.5" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.6" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.7" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.8" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.9" ]; then
+  if [ "${SPEEDTEST_SH_VERSION:-}" != "1.13" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.12" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.11" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.10" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.0" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.1" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.2" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.3" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.4" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.5" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.6" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.7" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.8" ] && [ "${SPEEDTEST_SH_VERSION:-}" != "1.9" ]; then
     echo "[X] Отсутствует lib/speedtest.sh (v1.0)" >&2
     missing=1
   fi

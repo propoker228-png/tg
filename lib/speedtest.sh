@@ -1,7 +1,11 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-SPEEDTEST_SH_VERSION="1.12"
+SPEEDTEST_SH_VERSION="1.13"
+
+speedtest_ookla_raw_has_result() {
+  printf '%s\n' "$1" | speedtest_extract_json >/dev/null 2>&1
+}
 SPEEDTEST_PROFILE_QUICK="quick"
 SPEEDTEST_PROFILE_FULL="full"
 SPEEDTEST_IP_FAMILY="${SPEEDTEST_IP_FAMILY:-}"
@@ -499,39 +503,36 @@ speedtest_run_cmd() {
 }
 
 speedtest_run_ookla() {
-  local raw bin tmp logf human_out
+  local raw bin tmp logf attempt
   bin=$(speedtest_cli_bin)
   [ -n "$bin" ] || return 1
   tmp=$(mktemp)
   logf=$(mktemp)
 
-  speedtest_log_step "Ookla Speedtest ($(speedtest_ip_family_label)): замер download/upload/ping (1–3 мин)..."
+  if ! speedtest_config_reachable; then
+    speedtest_log_step "Ookla: конфиг speedtest.net недоступен по curl — пробую прямой замер..."
+  else
+    speedtest_log_step "Ookla Speedtest ($(speedtest_ip_family_label)): замер 1–3 мин (лог ниже)..."
+  fi
 
-  if speedtest_is_interactive && speedtest_config_reachable; then
-    speedtest_run_cmd "$bin" --accept-license --accept-gdpr 2>&1 | tee "$logf" >/dev/stderr || true
-    if human_out=$(speedtest_parse_ookla_human <"$logf" 2>/dev/null); then
-      echo ""
-      echo -e "${BOLD}Режим: Ookla Speedtest ($(speedtest_ip_family_label))${NC}"
-      echo "$human_out"
+  for attempt in 1 2 3; do
+    if [ "$attempt" -gt 1 ]; then
+      speedtest_log_step "Ookla: повтор ${attempt}/3 (пауза 5 с)..."
+      sleep 5
+    fi
+    : >"$logf"
+    if speedtest_is_interactive; then
+      speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json 2>&1 | tee "$logf" >/dev/stderr || true
+    else
+      speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json >"$logf" 2>/dev/null || true
+    fi
+    raw=$(cat "$logf")
+    if speedtest_run_json_report "Ookla Speedtest" "$raw"; then
       rm -f "$tmp" "$logf"
       return 0
     fi
-    echo ""
-    speedtest_log_step "Ookla: повтор в формате JSON..."
-  elif speedtest_is_interactive; then
-    speedtest_log_step "Ookla: JSON (конфиг speedtest.net недоступен, прямой замер)..."
-  fi
-
-  if speedtest_is_interactive; then
-    speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json 2>&1 | tee "$logf" >/dev/stderr || true
-  else
-    speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json >"$logf" 2>/dev/null || true
-  fi
-  raw=$(cat "$logf")
-  if speedtest_run_json_report "Ookla Speedtest" "$raw"; then
-    rm -f "$tmp" "$logf"
-    return 0
-  fi
+    speedtest_ookla_raw_has_result "$raw" && break
+  done
 
   speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json -o "$tmp" 2>/dev/null || true
   if [ -s "$tmp" ] && speedtest_extract_json <"$tmp" >/dev/null 2>&1; then
@@ -674,7 +675,7 @@ run_speedtest() {
   log_warn "Тест использует интернет-трафик ($(speedtest_ip_family_label), полный режим 1–2 мин)"
   if speedtest_is_ookla_installed || speedtest_install_ookla; then
     speedtest_run_full && return 0
-    log_warn "Ookla Speedtest не ответил — переключаюсь на упрощённый режим (curl + Cloudflare upload, $(speedtest_ip_family_label))"
+    log_warn "Ookla недоступен (сеть/DNS speedtest.net) — упрощённый режим curl/Cloudflare"
   elif speedtest_is_legacy_installed; then
     log_warn "Установлен устаревший speedtest-cli — для полного теста выберите замену на Ookla"
     speedtest_run_legacy && return 0
