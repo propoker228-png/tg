@@ -22,7 +22,7 @@ echo "$out" | grep -q 'Download:.*100.0 Mbit/s' && pass "parse ookla download" |
 echo "$out" | grep -q 'Upload:.*50.0 Mbit/s' && pass "parse ookla upload" || fail "parse ookla upload"
 echo "$out" | grep -q 'Ping:.*12.4 ms' && pass "parse ookla ping" || fail "parse ookla ping"
 
-legacy='{"download":12500000,"upload":6250000,"ping":12.4,"server":{"name":"Amsterdam","country":"Netherlands"},"client":{"isp":"Test ISP"}}'
+legacy='{"download":100000000,"upload":50000000,"ping":12.4,"server":{"name":"Amsterdam","country":"Netherlands"},"client":{"isp":"Test ISP"}}'
 out=$(printf '%s\n' "$legacy" | speedtest_parse_json)
 echo "$out" | grep -q 'Download:.*100.0 Mbit/s' && pass "parse legacy download" || fail "parse legacy download"
 echo "$out" | grep -q 'Upload:.*50.0 Mbit/s' && pass "parse legacy upload" || fail "parse legacy upload"

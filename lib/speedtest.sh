@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-SPEEDTEST_SH_VERSION="1.1"
+SPEEDTEST_SH_VERSION="1.2"
 SPEEDTEST_PROFILE_QUICK="quick"
 SPEEDTEST_PROFILE_FULL="full"
 
@@ -45,8 +45,11 @@ speedtest_parse_json() {
   python3 <<'PY'
 import json, sys
 
-def to_mbit(bytes_per_sec):
+def to_mbit_from_bytes_per_sec(bytes_per_sec):
     return float(bytes_per_sec or 0) * 8 / 1_000_000
+
+def to_mbit_from_bits_per_sec(bits_per_sec):
+    return float(bits_per_sec or 0) / 1_000_000
 
 try:
     data = json.load(sys.stdin)
@@ -58,16 +61,16 @@ ul_raw = data.get("upload")
 ping_raw = data.get("ping")
 
 if isinstance(dl_raw, dict):
-    dl = to_mbit(dl_raw.get("bandwidth", 0))
-    ul = to_mbit(ul_raw.get("bandwidth", 0) if isinstance(ul_raw, dict) else 0)
+    dl = to_mbit_from_bytes_per_sec(dl_raw.get("bandwidth", 0))
+    ul = to_mbit_from_bytes_per_sec(ul_raw.get("bandwidth", 0) if isinstance(ul_raw, dict) else 0)
     lat = ping_raw.get("latency", 0) if isinstance(ping_raw, dict) else 0
     jit = ping_raw.get("jitter", 0) if isinstance(ping_raw, dict) else 0
     srv = data.get("server", {})
     loc = srv.get("location") or srv.get("name") or srv.get("country") or "н/д"
     isp = data.get("isp") or "н/д"
 else:
-    dl = to_mbit(dl_raw)
-    ul = to_mbit(ul_raw)
+    dl = to_mbit_from_bits_per_sec(dl_raw)
+    ul = to_mbit_from_bits_per_sec(ul_raw)
     lat = float(ping_raw or 0)
     jit = 0
     srv = data.get("server", {})
@@ -85,15 +88,20 @@ print(f"ISP:       {isp}")
 PY
 }
 
+speedtest_cli_bin() {
+  command -v speedtest 2>/dev/null || command -v speedtest-cli 2>/dev/null || true
+}
+
 speedtest_detect_backend() {
-  local help version
-  command -v speedtest >/dev/null 2>&1 || return 1
-  version=$(speedtest --version 2>&1 || true)
+  local help version bin
+  bin=$(speedtest_cli_bin)
+  [ -n "$bin" ] || return 1
+  version=$("$bin" --version 2>&1 || true)
   if printf '%s\n' "$version" | grep -qi 'ookla'; then
     echo "ookla"
     return 0
   fi
-  help=$(speedtest --help 2>&1 || true)
+  help=$("$bin" --help 2>&1 || true)
   if printf '%s\n' "$help" | grep -qE '(^|[[:space:]])--format=json'; then
     echo "ookla"
     return 0
@@ -123,24 +131,53 @@ speedtest_install_ookla() {
   speedtest_detect_backend >/dev/null 2>&1
 }
 
+speedtest_last_error_line() {
+  local raw="$1" line
+  line=$(printf '%s\n' "$raw" | grep -Evi '^\{' | grep -v '^[[:space:]]*$' | tail -1 || true)
+  [ -n "$line" ] && log_warn "speedtest: ${line}"
+}
+
 speedtest_run_json_report() {
   local mode_label="$1" raw json
   raw="$2"
+  [ -n "$raw" ] || return 1
   json=$(printf '%s\n' "$raw" | speedtest_extract_json) || return 1
   echo -e "${BOLD}Режим: ${mode_label}${NC}"
   printf '%s\n' "$json" | speedtest_parse_json || return 1
 }
 
+speedtest_run_cmd() {
+  local bin="$1"
+  shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 180 "$bin" "$@"
+  else
+    "$bin" "$@"
+  fi
+}
+
 speedtest_run_ookla() {
-  local raw
-  raw=$(speedtest --accept-license --accept-gdpr --format=json 2>&1) || return 1
+  local raw bin
+  bin=$(speedtest_cli_bin)
+  [ -n "$bin" ] || return 1
+  raw=$(speedtest_run_cmd "$bin" --accept-license --accept-gdpr --format=json 2>&1) || true
   speedtest_run_json_report "Ookla Speedtest" "$raw"
 }
 
 speedtest_run_legacy() {
-  local raw
-  raw=$(speedtest --json 2>&1) || return 1
-  speedtest_run_json_report "speedtest-cli" "$raw"
+  local raw bin
+  bin=$(speedtest_cli_bin)
+  [ -n "$bin" ] || return 1
+  raw=$(speedtest_run_cmd "$bin" --json 2>&1) || true
+  if speedtest_run_json_report "speedtest-cli" "$raw"; then
+    return 0
+  fi
+  raw=$(speedtest_run_cmd "$bin" --json --secure 2>&1) || true
+  if speedtest_run_json_report "speedtest-cli" "$raw"; then
+    return 0
+  fi
+  speedtest_last_error_line "$raw"
+  return 1
 }
 
 speedtest_run_full() {
@@ -196,7 +233,7 @@ speedtest_run_fallback_ping() {
 
 run_speedtest() {
   local profile="${1:-quick}"
-  log_warn "Тест использует интернет-трафик"
+  log_warn "Тест использует интернет-трафик (полный режим может занять 1–2 мин)"
   if speedtest_detect_backend >/dev/null 2>&1 || speedtest_install_ookla; then
     speedtest_run_full && return 0
     log_warn "Speedtest не ответил — переключаюсь на упрощённый режим"
