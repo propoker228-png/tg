@@ -51,7 +51,7 @@ remote_bootstrap() {
   fi
 }
 
-DOMAIN=""; TLS_DOMAIN=""; INSTALL_IP_ONLY=0; AD_TAG=""; TELEMT_VERSION=""; MEKO_VERSION=""; YES=0; MEKO_FULL=0; UNINSTALL=0
+DOMAIN=""; TLS_DOMAIN=""; INSTALL_IP_ONLY=0; AD_TAG=""; TELEMT_VERSION=""; MEKO_VERSION=""; YES=0; MEKO_FULL=0; UNINSTALL=0; PURGE=0
 FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; MEKO_BENCHMARK=0; DOCTOR=0; STUB_SITE=""; SYN_FIX_MODE=""
 SYN_FIX_CLI_SET=0
 PROXY_MODE="tls"; PROXY_MODE_CLI=""
@@ -91,6 +91,7 @@ while [ $# -gt 0 ]; do
     --meko-benchmark) MEKO_BENCHMARK=1; shift ;;
     --doctor) DOCTOR=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
+    --purge) PURGE=1; shift ;;
     --role) CLUSTER_ROLE=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --proxy-mode) PROXY_MODE_CLI=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
     --syn-fix) SYN_FIX_MODE=$(require_arg_value "$1" "${2:-}"); SYN_FIX_CLI_SET=1; shift 2 ;;
@@ -128,7 +129,7 @@ remote_bootstrap
 
 # shellcheck source=lib/common.sh
 source "$DEPLOY_ROOT/lib/common.sh"
-for mod in proxy_mode prereq stub_site syn_fix zapret2 dns nginx ssl ssl_renew telemt meko meko_stats meko_diag firewall dialog ui_highlight mask_picker version_picker sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor shaping install_step install_flow cli_tools menu; do
+for mod in proxy_mode prereq stub_site syn_fix zapret2 dns nginx ssl ssl_renew telemt meko meko_stats meko_diag firewall dialog ui_highlight mask_picker version_picker sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor shaping access_limits install_step install_flow cli_tools menu; do
   # shellcheck source=/dev/null
   source "$DEPLOY_ROOT/lib/${mod}.sh"
 done
@@ -141,6 +142,11 @@ proxy_mode_warn_ip_only_secure
 if [ "$FRESH" -eq 1 ] && [ "$KEEP_EXISTING" -eq 1 ]; then
   die "Нельзя одновременно использовать --fresh и --keep"
 fi
+
+if [ "$PURGE" -eq 1 ] && [ "$UNINSTALL" -ne 1 ]; then
+  die "Флаг --purge можно использовать только вместе с --uninstall"
+fi
+export PURGE
 
 validate_cli_inputs() {
   if [ "${INSTALL_IP_ONLY:-0}" -eq 1 ]; then
@@ -232,6 +238,10 @@ require_lib_bundle() {
   fi
   if [ "${SHAPING_SH_VERSION:-}" != "1.0" ]; then
     echo "[X] Отсутствует lib/shaping.sh (v1.0) — скопируйте lib/shaping.sh на сервер" >&2
+    missing=1
+  fi
+  if [ "${ACCESS_LIMITS_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/access_limits.sh (v1.0)" >&2
     missing=1
   fi
   if [ "${DIALOG_SH_VERSION:-}" != "1.0" ]; then

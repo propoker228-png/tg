@@ -47,6 +47,9 @@ telemt_write_config() {
   render_template "$DEPLOY_ROOT/templates/telemt.toml.tpl" /etc/telemt/telemt.toml
   chown root:telemt /etc/telemt/telemt.toml
   chmod 640 /etc/telemt/telemt.toml
+  if declare -f access_limits_apply >/dev/null 2>&1; then
+    access_limits_apply
+  fi
 }
 
 telemt_install_service() {
