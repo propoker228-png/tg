@@ -324,6 +324,50 @@ menu_uninstall() {
   pause_key_menu
 }
 
+menu_access_limits() {
+  local c="" devices="" ips="" tcp=""
+  require_installed || return 0
+  access_limits_ensure_config
+  while true; do
+    clear
+    access_limits_load_config
+    echo "=== Лимит устройств (общая ссылка) ==="
+    access_limits_format_status_line
+    echo ""
+    echo "  Примечание: это приближение, не device ID."
+    echo "  Несколько телефонов в одной Wi‑Fi = один IP."
+    echo ""
+    echo "  1) Включить / задать макс. устройств"
+    echo "  2) Расширенные настройки (IP и TCP отдельно)"
+    echo "  3) Выключить лимит"
+    echo "  0) Назад"
+    prompt_line c "Выбор" ""
+    case "$c" in
+      1)
+        prompt_line devices "Макс. устройств" "${ACCESS_LIMITS_MAX_DEVICES:-5}"
+        access_limits_validate_positive_int "$devices" || { log_warn "Введите целое >= 1"; sleep 1; continue; }
+        tcp=$(access_limits_derive_tcp_conns "$devices")
+        access_limits_save_config 1 "$devices" "$devices" "$tcp" 1
+        access_limits_apply && log_ok "Лимит включён: ${devices} устройств"
+        ;;
+      2)
+        prompt_line ips "Макс. уникальных IP" "${ACCESS_LIMITS_MAX_UNIQUE_IPS:-5}"
+        prompt_line tcp "Макс. TCP-соединений (мин. 5)" "${ACCESS_LIMITS_MAX_TCP_CONNS:-25}"
+        access_limits_validate_positive_int "$ips" || { log_warn "IP: целое >= 1"; sleep 1; continue; }
+        access_limits_validate_tcp_conns "$tcp" || { log_warn "TCP: минимум 5"; sleep 1; continue; }
+        access_limits_save_config 1 "${ACCESS_LIMITS_MAX_DEVICES:-5}" "$ips" "$tcp" 0
+        access_limits_apply && log_ok "Расширенные лимиты применены"
+        ;;
+      3)
+        access_limits_save_config 0 "${ACCESS_LIMITS_MAX_DEVICES:-5}" "${ACCESS_LIMITS_MAX_UNIQUE_IPS:-5}" "${ACCESS_LIMITS_MAX_TCP_CONNS:-25}" "${ACCESS_LIMITS_AUTO_TCP:-1}"
+        access_limits_apply && log_ok "Лимит выключен"
+        ;;
+      0) break ;;
+      *) log_warn "Неверный выбор"; sleep 1 ;;
+    esac
+  done
+}
+
 menu_shaping() {
   local c="" ip="" mbit="" iface=""
   require_installed || return 0
@@ -444,6 +488,7 @@ main_menu() {
     echo "  11) Удалить стек"
     echo "  12) Кластер / мульти-прокси"
     echo "  13) Шейпинг трафика"
+    echo "  14) Лимит устройств"
     echo "  0)  Выход"
     echo ""
     prompt_line choice "Выбор" ""
@@ -464,6 +509,7 @@ main_menu() {
       11) menu_uninstall ;;
       12) menu_cluster ;;
       13) menu_shaping ;;
+      14) menu_access_limits ;;
       0|q|Q) break ;;
       *) log_warn "Неверный выбор"; sleep 1 ;;
     esac

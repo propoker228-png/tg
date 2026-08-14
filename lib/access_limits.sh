@@ -122,6 +122,23 @@ access_limits_merge_toml() {
   mv "${path}.new" "$path"
 }
 
+access_limits_format_status_line() {
+  access_limits_load_config
+  [ "${ACCESS_LIMITS_ENABLED:-0}" -eq 1 ] || { echo "лимит: выкл"; return 0; }
+  local people="" conns=""
+  if declare -f fetch_proxy_online_people >/dev/null 2>&1; then
+    people=$(fetch_proxy_online_people)
+  else
+    people="?"
+  fi
+  if declare -f fetch_proxy_connections_total >/dev/null 2>&1; then
+    conns=$(fetch_proxy_connections_total)
+  else
+    conns="?"
+  fi
+  echo "лимит: ${people}/${ACCESS_LIMITS_MAX_DEVICES} устройств (IP: ${people}/${ACCESS_LIMITS_MAX_UNIQUE_IPS}, TCP: ${conns}/${ACCESS_LIMITS_MAX_TCP_CONNS})"
+}
+
 access_limits_apply() {
   access_limits_load_config
   [ -f "$ACCESS_LIMITS_TOML_FILE" ] || die "telemt.toml не найден: $ACCESS_LIMITS_TOML_FILE"
