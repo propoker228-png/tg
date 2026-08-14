@@ -27,4 +27,17 @@ access_limits_validate_positive_int 5 || fail "validate positive"
 access_limits_validate_tcp_conns 4 && fail "reject tcp<5"
 access_limits_validate_tcp_conns 5 || fail "accept tcp=5"
 
+tmp_toml="$ROOT/.tmp-access-limits-test/telemt.toml"
+cat > "$tmp_toml" <<'EOF'
+[access.users]
+default = "abc"
+EOF
+ACCESS_LIMITS_TOML_FILE="$tmp_toml"
+export ACCESS_LIMITS_TOML_FILE
+access_limits_merge_toml "$tmp_toml" 1 5 25
+grep -q 'user_max_unique_ips' "$tmp_toml" && pass "merge adds unique_ips" || fail "merge unique_ips"
+grep -q 'default = 25' "$tmp_toml" && pass "merge adds tcp" || fail "merge tcp"
+access_limits_merge_toml "$tmp_toml" 0 5 25
+! grep -q 'user_max_unique_ips' "$tmp_toml" && pass "merge strips when disabled" || fail "strip"
+
 exit "$FAIL"

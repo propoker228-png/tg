@@ -75,3 +75,63 @@ PY
 access_limits_ensure_config() {
   [ -f "$ACCESS_LIMITS_CONFIG_FILE" ] || access_limits_save_config 0 5 5 25 1
 }
+
+access_limits_strip_toml() {
+  local path="$1"
+  [ -f "$path" ] || return 0
+  python3 - "$path" "$ACCESS_LIMITS_MARKER_BEGIN" "$ACCESS_LIMITS_MARKER_END" <<'PY'
+import sys
+path, begin, end = sys.argv[1:4]
+try:
+    lines = open(path, encoding="utf-8").read().splitlines()
+except FileNotFoundError:
+    raise SystemExit(0)
+out, skip = [], False
+for line in lines:
+    if line.strip() == begin:
+        skip = True
+        continue
+    if line.strip() == end:
+        skip = False
+        continue
+    if not skip:
+        out.append(line)
+text = "\n".join(out).rstrip() + "\n"
+open(path, "w", encoding="utf-8").write(text)
+PY
+}
+
+access_limits_render_fragment() {
+  local unique_ips="$1" tcp_conns="$2" deploy_root="${DEPLOY_ROOT:-.}"
+  export ACCESS_MAX_UNIQUE_IPS="$unique_ips" ACCESS_MAX_TCP_CONNS="$tcp_conns"
+  envsubst '${ACCESS_MAX_UNIQUE_IPS} ${ACCESS_MAX_TCP_CONNS}' \
+    < "$deploy_root/templates/telemt-access-limits.toml.tpl"
+}
+
+access_limits_merge_toml() {
+  local path="$1" enabled="$2" unique_ips="$3" tcp_conns="$4" fragment
+  access_limits_strip_toml "$path"
+  [ "$enabled" = "1" ] || return 0
+  fragment="$(access_limits_render_fragment "$unique_ips" "$tcp_conns")"
+  {
+    [ -s "$path" ] && cat "$path"
+    printf '%s\n' "$ACCESS_LIMITS_MARKER_BEGIN"
+    printf '%s\n' "$fragment"
+    printf '%s\n' "$ACCESS_LIMITS_MARKER_END"
+  } > "${path}.new"
+  mv "${path}.new" "$path"
+}
+
+access_limits_apply() {
+  access_limits_load_config
+  [ -f "$ACCESS_LIMITS_TOML_FILE" ] || die "telemt.toml не найден: $ACCESS_LIMITS_TOML_FILE"
+  access_limits_merge_toml "$ACCESS_LIMITS_TOML_FILE" \
+    "$ACCESS_LIMITS_ENABLED" "$ACCESS_LIMITS_MAX_UNIQUE_IPS" "$ACCESS_LIMITS_MAX_TCP_CONNS"
+  if systemctl is-active --quiet telemt 2>/dev/null; then
+    systemctl restart telemt || die "telemt не перезапустился после применения лимитов"
+    systemctl is-active --quiet telemt || {
+      journalctl -u telemt --no-pager -n 20
+      die "telemt не active после применения лимитов"
+    }
+  fi
+}
