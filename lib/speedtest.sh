@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-SPEEDTEST_SH_VERSION="1.8"
+SPEEDTEST_SH_VERSION="1.9"
 SPEEDTEST_PROFILE_QUICK="quick"
 SPEEDTEST_PROFILE_FULL="full"
 SPEEDTEST_IP_FAMILY="${SPEEDTEST_IP_FAMILY:-}"
@@ -445,9 +445,8 @@ speedtest_run_ookla() {
   [ -n "$bin" ] || return 1
   ip_args=$(speedtest_ookla_ip_args)
   for extra in \
-    "--accept-license --accept-gdpr -f json -P no" \
-    "--accept-license --accept-gdpr -f json --progress=no" \
-    "--accept-license --accept-gdpr --format=json -P no"
+    "--accept-license --accept-gdpr -f json" \
+    "--accept-license --accept-gdpr --format json"
   do
     # shellcheck disable=SC2086
     raw=$(speedtest_run_ookla_capture "$bin" $extra $ip_args) && speedtest_run_json_report "Ookla Speedtest" "$raw" && return 0
@@ -577,7 +576,7 @@ run_speedtest() {
 # Backward-compatible aliases for smoke tests
 speedtest_last_error_line() {
   local raw="$1" line
-  line=$(printf '%s\n' "$raw" | grep -Evi '^\{' | grep -v '^[[:space:]]*$' | tail -1 || true)
+  line=$(printf '%s\n' "$raw" | grep -Evi '^\{|Auto-scaled prefix|auto-binary|auto-decimal' | grep -v '^[[:space:]]*$' | tail -1 || true)
   [ -n "$line" ] && log_warn "speedtest: ${line}"
 }
 speedtest_extract_ookla_json() { speedtest_extract_json; }
