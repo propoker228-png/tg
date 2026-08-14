@@ -278,8 +278,8 @@ require_lib_bundle() {
     echo "[X] Отсутствует lib/stub_site.sh (v1.0) — скопируйте lib/stub_site.sh на сервер" >&2
     missing=1
   fi
-  if [ "${SYN_FIX_SH_VERSION:-}" != "1.0" ]; then
-    echo "[X] Отсутствует lib/syn_fix.sh (v1.0) — скопируйте lib/syn_fix.sh на сервер" >&2
+  if [ "${SYN_FIX_SH_VERSION:-}" != "1.0" ] && [ "${SYN_FIX_SH_VERSION:-}" != "1.1" ]; then
+    echo "[X] Устаревший lib/syn_fix.sh (нужен v1.0+) — скопируйте lib/syn_fix.sh на сервер" >&2
     missing=1
   fi
   if [ "${ZAPRET2_SH_VERSION:-}" != "1.0" ]; then
