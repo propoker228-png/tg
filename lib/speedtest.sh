@@ -2,10 +2,6 @@
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 SPEEDTEST_SH_VERSION="1.13"
-
-speedtest_ookla_raw_has_result() {
-  printf '%s\n' "$1" | speedtest_extract_json >/dev/null 2>&1
-}
 SPEEDTEST_PROFILE_QUICK="quick"
 SPEEDTEST_PROFILE_FULL="full"
 SPEEDTEST_IP_FAMILY="${SPEEDTEST_IP_FAMILY:-}"
@@ -124,6 +120,10 @@ if not isinstance(data, dict):
     sys.exit(1)
 json.dump(data)
 PY
+}
+
+speedtest_ookla_raw_has_result() {
+  printf '%s\n' "$1" | speedtest_extract_json >/dev/null 2>&1
 }
 
 speedtest_parse_json() {
