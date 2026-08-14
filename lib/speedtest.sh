@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-SPEEDTEST_SH_VERSION="1.6"
+SPEEDTEST_SH_VERSION="1.7"
 SPEEDTEST_PROFILE_QUICK="quick"
 SPEEDTEST_PROFILE_FULL="full"
 SPEEDTEST_IP_FAMILY="${SPEEDTEST_IP_FAMILY:-}"
@@ -242,20 +242,67 @@ speedtest_remove_legacy() {
   [ "$removed" -eq 1 ] && log_ok "Старый speedtest-cli удалён"
 }
 
-speedtest_install_ookla_pkg() {
-  export DEBIAN_FRONTEND=noninteractive
-  if ! command -v apt-get >/dev/null 2>&1; then
-    log_warn "apt недоступен — Ookla не установлен"
+speedtest_fixup_ookla_apt_repo() {
+  local f codename fixed=0
+  codename=$(. /etc/os-release 2>/dev/null && echo "${VERSION_CODENAME:-}")
+  for f in /etc/apt/sources.list.d/ookla_speedtest-cli.list /etc/apt/sources.list.d/ookla-speedtest-cli.list; do
+    [ -f "$f" ] || continue
+    if grep -qE '/ubuntu (noble|'"${codename}"') ' "$f" 2>/dev/null; then
+      sed -i 's/ubuntu noble/ubuntu jammy/g' "$f"
+      [ -n "$codename" ] && [ "$codename" != "noble" ] && sed -i "s/ubuntu ${codename}/ubuntu jammy/g" "$f" 2>/dev/null || true
+      fixed=1
+    fi
+  done
+  [ "$fixed" -eq 1 ] && log_warn "Ookla repo: ${codename:-noble} → jammy (workaround Ubuntu 24.04+)"
+}
+
+speedtest_install_ookla_binary() {
+  local arch tmp url bin_path
+  arch=$(uname -m)
+  case "$arch" in
+    x86_64|amd64) url="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-x86_64.tgz" ;;
+    aarch64|arm64) url="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-aarch64.tgz" ;;
+    *)
+      log_warn "Архитектура ${arch} не поддерживается для Ookla binary"
+      return 1
+      ;;
+  esac
+  tmp=$(mktemp -d)
+  if ! curl -fsSL "$url" -o "$tmp/ookla-speedtest.tgz"; then
+    rm -rf "$tmp"
     return 1
   fi
-  if [ ! -f /etc/apt/sources.list.d/ookla_speedtest-cli.list ] \
-    && [ ! -f /etc/apt/sources.list.d/ookla-speedtest-cli.list ]; then
-    curl -fsSL https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.deb.sh | bash
+  if ! tar -xzf "$tmp/ookla-speedtest.tgz" -C "$tmp"; then
+    rm -rf "$tmp"
+    return 1
   fi
-  apt-get update -qq
-  apt-get install -y speedtest
+  bin_path="$tmp/speedtest"
+  [ -x "$bin_path" ] || bin_path=$(find "$tmp" -maxdepth 2 -name speedtest -type f 2>/dev/null | head -1)
+  if [ -z "$bin_path" ] || [ ! -f "$bin_path" ]; then
+    rm -rf "$tmp"
+    return 1
+  fi
+  install -m 755 "$bin_path" /usr/local/bin/speedtest
+  rm -rf "$tmp"
   hash -r 2>/dev/null || true
   speedtest_is_ookla_installed
+}
+
+speedtest_install_ookla_pkg() {
+  export DEBIAN_FRONTEND=noninteractive
+  if command -v apt-get >/dev/null 2>&1; then
+    if [ ! -f /etc/apt/sources.list.d/ookla_speedtest-cli.list ] \
+      && [ ! -f /etc/apt/sources.list.d/ookla-speedtest-cli.list ]; then
+      curl -fsSL https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.deb.sh | bash || true
+    fi
+    speedtest_fixup_ookla_apt_repo
+    if apt-get update -qq 2>/dev/null && apt-get install -y speedtest 2>/dev/null; then
+      hash -r 2>/dev/null || true
+      speedtest_is_ookla_installed && return 0
+    fi
+    log_warn "Установка Ookla через apt не удалась — пробую standalone binary"
+  fi
+  speedtest_install_ookla_binary
 }
 
 speedtest_install_ookla() {
