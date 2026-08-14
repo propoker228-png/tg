@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-SPEEDTEST_SH_VERSION="1.13"
+SPEEDTEST_SH_VERSION="1.16"
 SPEEDTEST_PROFILE_QUICK="quick"
 SPEEDTEST_PROFILE_FULL="full"
 SPEEDTEST_IP_FAMILY="${SPEEDTEST_IP_FAMILY:-}"
@@ -92,8 +92,8 @@ speedtest_ping_targets() {
 }
 
 speedtest_extract_json() {
-  python3 <<'PY'
-import json, sys
+  # python3 -c (not heredoc): heredoc steals stdin and breaks piped input
+  python3 -c 'import json, sys
 text = sys.stdin.read()
 for line in text.splitlines():
     line = line.strip()
@@ -106,7 +106,7 @@ for line in text.splitlines():
     if not isinstance(data, dict):
         continue
     if data.get("type") == "result" or isinstance(data.get("download"), dict):
-        json.dump(data)
+        json.dump(data, sys.stdout)
         sys.exit(0)
 start = text.find("{")
 end = text.rfind("}")
@@ -118,8 +118,7 @@ except json.JSONDecodeError:
     sys.exit(1)
 if not isinstance(data, dict):
     sys.exit(1)
-json.dump(data)
-PY
+json.dump(data, sys.stdout)'
 }
 
 speedtest_ookla_raw_has_result() {
@@ -127,8 +126,7 @@ speedtest_ookla_raw_has_result() {
 }
 
 speedtest_parse_json() {
-  python3 <<'PY'
-import json, sys
+  python3 -c 'import json, sys
 
 def to_mbit_from_bytes_per_sec(bytes_per_sec):
     return float(bytes_per_sec or 0) * 8 / 1_000_000
@@ -169,8 +167,7 @@ print(f"Ping:      {lat:.1f} ms")
 if jit:
     print(f"Jitter:    {jit:.1f} ms")
 print(f"Server:    {loc}")
-print(f"ISP:       {isp}")
-PY
+print(f"ISP:       {isp}")'
 }
 
 speedtest_is_ookla_bin() {
@@ -400,32 +397,30 @@ speedtest_log_step() {
 }
 
 speedtest_parse_ookla_human() {
-  python3 <<'PY'
-import re, sys
+  python3 -c 'import re, sys
 text = sys.stdin.read()
 if not text.strip():
     sys.exit(1)
 
-def grab(label, pat):
+def grab(pat):
     m = re.search(pat, text, re.I | re.M)
     return m.group(1).strip() if m else ""
 
-dl = grab("dl", r"Download:\s*([0-9][^\n]*)")
-ul = grab("ul", r"Upload:\s*([0-9][^\n]*)")
-lat = grab("lat", r"Latency:\s*([0-9][^\n]*)")
-jit = grab("jit", r"Jitter:\s*([0-9][^\n]*)")
-srv = grab("srv", r"Server:\s*([^\n]+)")
-isp = grab("isp", r"ISP:\s*([^\n]+)")
+dl = grab(r"Download:\s*([0-9][^\n]*)")
+ul = grab(r"Upload:\s*([0-9][^\n]*)")
+lat = grab(r"Latency:\s*([0-9][^\n]*)")
+jit = grab(r"Jitter:\s*([0-9][^\n]*)")
+srv = grab(r"Server:\s*([^\n]+)")
+isp = grab(r"ISP:\s*([^\n]+)")
 if not dl:
     sys.exit(1)
 print(f"Download:  {dl}")
-print(f"Upload:    {ul or 'н/д'}")
-print(f"Ping:      {lat or 'н/д'}")
+print(f"Upload:    {ul or \"н/д\"}")
+print(f"Ping:      {lat or \"н/д\"}")
 if jit:
     print(f"Jitter:    {jit}")
-print(f"Server:    {srv or 'н/д'}")
-print(f"ISP:       {isp or 'н/д'}")
-PY
+print(f"Server:    {srv or \"н/д\"}")
+print(f"ISP:       {isp or \"н/д\"}")'
 }
 
 speedtest_run_json_report() {
@@ -503,9 +498,10 @@ speedtest_run_cmd() {
 }
 
 speedtest_run_ookla() {
-  local raw bin tmp logf attempt
+  local raw bin tmp logf attempt ip_args last_result_raw=""
   bin=$(speedtest_cli_bin)
   [ -n "$bin" ] || return 1
+  ip_args=$(speedtest_ookla_ip_args)
   tmp=$(mktemp)
   logf=$(mktemp)
 
@@ -522,19 +518,30 @@ speedtest_run_ookla() {
     fi
     : >"$logf"
     if speedtest_is_interactive; then
-      speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json 2>&1 | tee "$logf" >/dev/stderr || true
+      # shellcheck disable=SC2086
+      speedtest_run_cmd "$bin" --accept-license --accept-gdpr $ip_args -f json 2>&1 | tee "$logf" >/dev/stderr || true
     else
-      speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json >"$logf" 2>/dev/null || true
+      # shellcheck disable=SC2086
+      speedtest_run_cmd "$bin" --accept-license --accept-gdpr $ip_args -f json >"$logf" 2>/dev/null || true
     fi
     raw=$(cat "$logf")
     if speedtest_run_json_report "Ookla Speedtest" "$raw"; then
       rm -f "$tmp" "$logf"
       return 0
     fi
-    speedtest_ookla_raw_has_result "$raw" && break
+    if speedtest_ookla_raw_has_result "$raw"; then
+      last_result_raw="$raw"
+      break
+    fi
   done
 
-  speedtest_run_cmd "$bin" --accept-license --accept-gdpr -f json -o "$tmp" 2>/dev/null || true
+  if [ -n "$last_result_raw" ]; then
+    rm -f "$tmp" "$logf"
+    speedtest_run_json_report "Ookla Speedtest" "$last_result_raw" && return 0
+  fi
+
+  # shellcheck disable=SC2086
+  speedtest_run_cmd "$bin" --accept-license --accept-gdpr $ip_args -f json -o "$tmp" 2>/dev/null || true
   if [ -s "$tmp" ] && speedtest_extract_json <"$tmp" >/dev/null 2>&1; then
     raw=$(cat "$tmp")
     rm -f "$tmp" "$logf"
@@ -644,13 +651,15 @@ speedtest_run_fallback_upload() {
   speedtest_log_step "Upload: ~${mb} MB → ${url}"
   if speedtest_is_interactive; then
     time=$(dd if=/dev/zero bs=1M count="$mb" 2>/dev/null | speedtest_curl --progress-bar -o /dev/null -w '%{time_total}' \
-      --max-time 120 -X POST -H "Content-Type: application/octet-stream" --data-binary @- "$url" 2>/dev/tty) || {
+      --max-time 120 --retry 3 --retry-delay 2 --retry-all-errors \
+      -X POST -H "Content-Type: application/octet-stream" --data-binary @- "$url" 2>/dev/tty) || {
       echo "Upload:    н/д (cloudflare недоступен по $(speedtest_ip_family_label))"
       return 1
     }
   else
     time=$(dd if=/dev/zero bs=1M count="$mb" 2>/dev/null | speedtest_curl -fsSL -o /dev/null -w '%{time_total}' \
-      --max-time 120 -X POST -H "Content-Type: application/octet-stream" --data-binary @- "$url" 2>/dev/null) || {
+      --max-time 120 --retry 3 --retry-delay 2 --retry-all-errors \
+      -X POST -H "Content-Type: application/octet-stream" --data-binary @- "$url" 2>/dev/null) || {
       echo "Upload:    н/д (cloudflare недоступен по $(speedtest_ip_family_label))"
       return 1
     }
