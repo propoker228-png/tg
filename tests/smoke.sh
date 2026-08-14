@@ -388,6 +388,7 @@ check_cmd_fail "invalid --meko-version value" bash "$ROOT/install.sh" --meko-ver
 check_cmd_fail "invalid --syn-fix value" bash "$ROOT/install.sh" --syn-fix bogus
 
 check_cmd_ok "access limits smoke" bash "$ROOT/tests/access_limits_smoke.sh"
+check_cmd_ok "speedtest smoke" bash "$ROOT/tests/speedtest_smoke.sh"
 
 bash "$ROOT/tests/proxy_mode_smoke.sh" || FAIL=1
 bash "$ROOT/tests/meko_diag_smoke.sh" || FAIL=1

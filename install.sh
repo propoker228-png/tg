@@ -3,7 +3,7 @@
 #
 # Использование: sudo bash install.sh [флаги]
 #
-# Без флагов — интерактивное меню управления (п. 1–14).
+# Без флагов — интерактивное меню управления (п. 1–15).
 #
 #   --domain DOMAIN         Домен (A-запись → этот сервер)
 #   --tls-domain DOMAIN     Домен маскировки TLS/SNI (обязателен с --ip-only)
@@ -19,6 +19,7 @@
 #   --meko-upgrade          Обновить MEKO SYN FIX до версии из комплекта
 #   --meko-benchmark        Диагностика MEKO hashlimit (ACCEPT/REJECT, burst)
 #   --doctor                Полная диагностика (tg doctor)
+#   --speedtest             Тест скорости интернета на сервере
 #   --uninstall             Удалить установленный стек (секрет и SSL сохраняются)
 #   --purge                 С --uninstall: полное удаление (секрет, certbot, /opt/telemt*)
 #   --role ROLE             standalone | node | lb | master | master_lb (кластер)
@@ -53,7 +54,7 @@ remote_bootstrap() {
 }
 
 DOMAIN=""; TLS_DOMAIN=""; INSTALL_IP_ONLY=0; AD_TAG=""; TELEMT_VERSION=""; MEKO_VERSION=""; YES=0; MEKO_FULL=0; UNINSTALL=0; PURGE=0
-FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; MEKO_BENCHMARK=0; DOCTOR=0; STUB_SITE=""; SYN_FIX_MODE=""
+FRESH=0; KEEP_EXISTING=0; STATUS=0; MEKO_UPGRADE=0; MEKO_BENCHMARK=0; DOCTOR=0; SPEEDTEST=0; STUB_SITE=""; SYN_FIX_MODE=""
 SYN_FIX_CLI_SET=0
 PROXY_MODE="tls"; PROXY_MODE_CLI=""
 CLUSTER_ROLE="standalone"; CLUSTER_DOMAIN=""; CLUSTER_SECRET=""
@@ -91,6 +92,7 @@ while [ $# -gt 0 ]; do
     --meko-upgrade) MEKO_UPGRADE=1; shift ;;
     --meko-benchmark) MEKO_BENCHMARK=1; shift ;;
     --doctor) DOCTOR=1; shift ;;
+    --speedtest) SPEEDTEST=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
     --purge) PURGE=1; shift ;;
     --role) CLUSTER_ROLE=$(require_arg_value "$1" "${2:-}"); shift 2 ;;
@@ -114,7 +116,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE MEKO_BENCHMARK DOCTOR INSTALL_IP_ONLY STUB_SITE SYN_FIX_MODE SYN_FIX_CLI_SET
+export TELEMT_VERSION MEKO_VERSION MEKO_FULL YES FRESH KEEP_EXISTING MEKO_UPGRADE MEKO_BENCHMARK DOCTOR SPEEDTEST INSTALL_IP_ONLY STUB_SITE SYN_FIX_MODE SYN_FIX_CLI_SET
 [ "$CLUSTER_ROLE" = "master-lb" ] && CLUSTER_ROLE=master_lb
 export CLUSTER_ROLE CLUSTER_DOMAIN CLUSTER_SECRET CLUSTER_NODES MASTER_PANEL_URL NODE_NAME CLUSTER_AGENT_TOKEN
 [ -n "$TLS_DOMAIN" ] && export TLS_DOMAIN
@@ -130,7 +132,7 @@ remote_bootstrap
 
 # shellcheck source=lib/common.sh
 source "$DEPLOY_ROOT/lib/common.sh"
-for mod in proxy_mode prereq stub_site syn_fix zapret2 dns nginx ssl ssl_renew telemt meko meko_stats meko_diag firewall dialog ui_highlight mask_picker version_picker sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor shaping access_limits install_step install_flow cli_tools menu; do
+for mod in proxy_mode prereq stub_site syn_fix zapret2 dns nginx ssl ssl_renew telemt meko meko_stats meko_diag firewall dialog ui_highlight mask_picker version_picker sni_check haproxy cluster panel cluster_agent cluster_migrate cluster_panel role_wizard link backup doctor verify handoff uninstall env stats monitor shaping access_limits speedtest install_step install_flow cli_tools menu; do
   # shellcheck source=/dev/null
   source "$DEPLOY_ROOT/lib/${mod}.sh"
 done
@@ -243,6 +245,10 @@ require_lib_bundle() {
   fi
   if [ "${ACCESS_LIMITS_SH_VERSION:-}" != "1.0" ]; then
     echo "[X] Отсутствует lib/access_limits.sh (v1.0)" >&2
+    missing=1
+  fi
+  if [ "${SPEEDTEST_SH_VERSION:-}" != "1.0" ]; then
+    echo "[X] Отсутствует lib/speedtest.sh (v1.0)" >&2
     missing=1
   fi
   if [ "${DIALOG_SH_VERSION:-}" != "1.0" ]; then
@@ -443,6 +449,11 @@ fi
 if [ "$MEKO_BENCHMARK" -eq 1 ]; then
   meko_diag_run_benchmark
   exit 0
+fi
+
+if [ "$SPEEDTEST" -eq 1 ]; then
+  run_speedtest "${SPEEDTEST_PROFILE:-quick}"
+  exit $?
 fi
 
 if [ "$UNINSTALL" -eq 1 ]; then

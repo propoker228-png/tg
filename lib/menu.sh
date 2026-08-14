@@ -348,6 +348,26 @@ menu_uninstall() {
   done
 }
 
+menu_speedtest() {
+  local c="" profile="quick"
+  while true; do
+    clear
+    echo "=== Тест скорости интернета ==="
+    echo "  1) Быстрый тест (~10 MB)"
+    echo "  2) Полный тест (~100 MB)"
+    echo "  0) Назад"
+    prompt_line c "Выбор" ""
+    case "$c" in
+      1) profile="quick"; break ;;
+      2) profile="full"; break ;;
+      0) return 0 ;;
+      *) log_warn "Неверный выбор"; sleep 1 ;;
+    esac
+  done
+  run_speedtest "$profile"
+  pause_key_menu
+}
+
 menu_access_limits() {
   local c="" devices="" ips="" tcp=""
   require_installed || return 0
@@ -513,6 +533,7 @@ main_menu() {
     echo "  12) Кластер / мульти-прокси"
     echo "  13) Шейпинг трафика"
     echo "  14) Лимит устройств"
+    echo "  15) Тест скорости интернета"
     echo "  0)  Выход"
     echo ""
     prompt_line choice "Выбор" ""
@@ -534,6 +555,7 @@ main_menu() {
       12) menu_cluster ;;
       13) menu_shaping ;;
       14) menu_access_limits ;;
+      15) menu_speedtest ;;
       0|q|Q) break ;;
       *) log_warn "Неверный выбор"; sleep 1 ;;
     esac
