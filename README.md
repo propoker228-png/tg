@@ -36,9 +36,10 @@ sudo bash install.sh
 | 8 | Firewall |
 | 9 | Проверки (быстрая / doctor) |
 | 10 | Обновить telemt |
-| 11 | Удалить стек |
+| 11 | Удалить стек (подменю: обычное / полное удаление) |
 | 12 | Кластер / мульти-прокси |
 | 13 | Шейпинг трафика (лимит Mbit/s на IP, исходящий) |
+| 14 | Лимит устройств (общая ссылка: IP + TCP; приближение, не device ID) |
 | 0 | Выход |
 
 При выборе **1) Установка** откроется **мастер ролей** (installer v3.0):
@@ -51,7 +52,9 @@ sudo bash install.sh
 
 Мастер задаёт только недостающие вопросы для выбранной роли, показывает сводку и запрашивает подтверждение.
 
-В шапке меню: домен, версия telemt, **число подключённых** (жёлтым, как в MEKO), TCP, статусы сервисов.
+В шапке меню: домен, версия telemt, **число подключённых** (жёлтым, как в MEKO), TCP, статусы сервисов; при включённом лимите устройств — строка `лимит: X/Y ...`.
+
+Пункт **14) Лимит устройств** ограничивает число клиентов на общей ссылке через комбинацию `user_max_unique_ips` и `user_max_tcp_conns` в telemt. Это **приближение** (не настоящий device ID): несколько телефонов в одной Wi‑Fi считаются одним IP; минимум TCP — **5** на устройство.
 
 Флаги `--status`, `--domain`, `--uninstall` и др. **обходят меню** (для автоматизации и cron).
 
@@ -72,7 +75,8 @@ sudo bash install.sh
 | `--meko-upgrade` | Обновить MEKO SYN FIX до версии из комплекта |
 | `--meko-benchmark` | Диагностика MEKO hashlimit (ACCEPT/REJECT, burst) |
 | `--syn-fix MODE` | `meko` (по умолчанию), `zapret2` (обход DPI, как в MTProxyL) или `none` |
-| `--uninstall` | Удалить установленный стек |
+| `--uninstall` | Удалить установленный стек (секрет и SSL сохраняются) |
+| `--purge` | С `--uninstall`: полное удаление (секрет, certbot, `/opt/telemt*`) |
 | `--proxy-mode MODE` | `tls` (Fake TLS, по умолчанию) или `secure` (Obfuscated2/dd); только standalone |
 | `--role ROLE` | `standalone` \| `node` \| `lb` \| `master` \| `master-lb` (кластер) |
 | `--cluster-agent-token HEX` | Токен push-агента (для node) |
@@ -177,6 +181,12 @@ sudo bash install.sh --doctor
 sudo bash install.sh --uninstall
 ```
 
+Полное удаление (секрет и сертификаты удаляются; в меню — пункт **11 → 2**, нужно ввести `DELETE`):
+
+```bash
+sudo bash install.sh --uninstall --purge
+```
+
 ## Команды tg
 
 ```bash
@@ -204,6 +214,7 @@ sudo tg restore /root/telemt-backup-....tar.gz
 | `/root/telemt-secret.txt` | Секрет прокси (сохраняется при переустановке) |
 | `/root/telemt-deploy.state` | Состояние последней установки |
 | `/etc/telemt/telemt.toml` | Конфигурация telemt |
+| `/etc/telemt/access-limits.json` | Лимит устройств (п. 14 меню) |
 | `/etc/letsencrypt/live/DOMAIN/` | SSL-сертификат |
 
 ## Проверка
@@ -216,6 +227,7 @@ bash tests/role_wizard_smoke.sh  # мастер ролей: summary, SECRET, н�
 bash tests/proxy_mode_smoke.sh      # режим secure/dd: config, ссылки (без root)
 bash tests/meko_diag_smoke.sh       # MEKO SYN ratio parse (без root)
 bash tests/shaping_smoke.sh      # шейпинг: effective_limit, config JSON (без root)
+bash tests/access_limits_smoke.sh # лимит устройств: JSON, TOML merge, TCP min 5 (без root)
 bash install.sh --help           # справка
 sudo tg                          # меню управления после установки
 ```

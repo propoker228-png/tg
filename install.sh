@@ -3,7 +3,7 @@
 #
 # Использование: sudo bash install.sh [флаги]
 #
-# Без флагов — интерактивное меню управления (п. 1–12).
+# Без флагов — интерактивное меню управления (п. 1–14).
 #
 #   --domain DOMAIN         Домен (A-запись → этот сервер)
 #   --tls-domain DOMAIN     Домен маскировки TLS/SNI (обязателен с --ip-only)
@@ -19,7 +19,8 @@
 #   --meko-upgrade          Обновить MEKO SYN FIX до версии из комплекта
 #   --meko-benchmark        Диагностика MEKO hashlimit (ACCEPT/REJECT, burst)
 #   --doctor                Полная диагностика (tg doctor)
-#   --uninstall             Удалить установленный стек
+#   --uninstall             Удалить установленный стек (секрет и SSL сохраняются)
+#   --purge                 С --uninstall: полное удаление (секрет, certbot, /opt/telemt*)
 #   --role ROLE             standalone | node | lb | master | master_lb (кластер)
 #   --proxy-mode MODE       tls (Fake TLS, default) | secure (Obfuscated2/dd); только standalone
 #   --syn-fix MODE          meko (default) | zapret2 | none — SYN-фикс / обход DPI
