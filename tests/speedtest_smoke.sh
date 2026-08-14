@@ -39,4 +39,9 @@ r=$(speedtest_profile_upload_mb quick)
 r=$(speedtest_profile_upload_mb full)
 [ "$r" = "25" ] && pass "profile full upload mb" || fail "full upload mb got=$r"
 
+SPEEDTEST_IP_FAMILY=4
+[ "$(speedtest_ip_family_label)" = "IPv4" ] && pass "ip family label v4" || fail "ip family label v4"
+SPEEDTEST_IP_FAMILY=6
+[ "$(speedtest_ip_family_label)" = "IPv6" ] && pass "ip family label v6" || fail "ip family label v6"
+
 exit "$FAIL"
