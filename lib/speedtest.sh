@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-SPEEDTEST_SH_VERSION="1.17"
+SPEEDTEST_SH_VERSION="1.18"
 SPEEDTEST_PROFILE_QUICK="quick"
 SPEEDTEST_PROFILE_FULL="full"
 SPEEDTEST_IP_FAMILY="${SPEEDTEST_IP_FAMILY:-}"
@@ -477,16 +477,28 @@ speedtest_curl_max_time() {
   esac
 }
 
+speedtest_default_iface() {
+  if [ "${SPEEDTEST_IP_FAMILY:-4}" = "6" ]; then
+    ip -6 route show default 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i == "dev") { print $(i + 1); exit }}'
+  else
+    ip -4 route show default 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i == "dev") { print $(i + 1); exit }}'
+  fi
+}
+
 speedtest_ookla_ip_args() {
-  local bin help
+  local bin help src iface
   bin=$(speedtest_cli_bin)
   [ -n "$bin" ] || return 0
   help=$("$bin" --help 2>&1 || true)
-  printf '%s\n' "$help" | grep -qE '(^|[[:space:]])--ip' || return 0
-  if [ "${SPEEDTEST_IP_FAMILY:-4}" = "6" ]; then
-    echo --ip=ipv6
-  else
-    echo --ip=ipv4
+  # Ookla 1.2.x: -i/--ip=ADDR binds a local IP; --ip=ipv4 is invalid and breaks on /32 VPS
+  src=$(speedtest_primary_ip)
+  if [ -n "$src" ] && printf '%s\n' "$help" | grep -qE '(^|[[:space:]])-i,[[:space:]]+--ip='; then
+    echo -i "$src"
+    return 0
+  fi
+  iface=$(speedtest_default_iface)
+  if [ -n "$iface" ] && printf '%s\n' "$help" | grep -qE '(^|[[:space:]])-I,[[:space:]]+--interface='; then
+    echo --interface="$iface"
   fi
 }
 
