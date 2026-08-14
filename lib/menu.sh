@@ -318,10 +318,34 @@ menu_upgrade_telemt() {
 }
 
 menu_uninstall() {
-  confirm_action "Удалить установленный стек telemt-deploy?" || return 0
-  uninstall_all
-  log_ok "Стек удалён"
-  pause_key_menu
+  local c="" confirm=""
+  while true; do
+    clear
+    echo "=== Удаление ==="
+    echo "  1) Удалить стек (сохранить секрет и SSL)"
+    echo "  2) Полное удаление (секрет + сертификаты)"
+    echo "  0) Назад"
+    prompt_line c "Выбор" ""
+    case "$c" in
+      1)
+        confirm_action "Удалить установленный стек?" || return 0
+        PURGE=0 uninstall_all
+        log_ok "Стек удалён (секрет и SSL сохранены)"
+        pause_key_menu
+        return 0
+        ;;
+      2)
+        prompt_line confirm "Введите DELETE для подтверждения" ""
+        [ "$confirm" = "DELETE" ] || { log_warn "Отменено"; sleep 1; continue; }
+        PURGE=1 uninstall_all
+        log_ok "Полное удаление завершено"
+        pause_key_menu
+        return 0
+        ;;
+      0) return 0 ;;
+      *) log_warn "Неверный выбор"; sleep 1 ;;
+    esac
+  done
 }
 
 menu_access_limits() {

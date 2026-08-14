@@ -84,6 +84,10 @@ render_menu_header() {
     echo "  zapret2: $(zapret2_status_label)"
   fi
   echo -e "  подключено: ${YELLOW}${people}${NC} человек | TCP: ${conns}"
+  if declare -f access_limits_format_status_line >/dev/null 2>&1; then
+    access_limits_load_config 2>/dev/null || true
+    [ "${ACCESS_LIMITS_ENABLED:-0}" -eq 1 ] && echo "  $(access_limits_format_status_line)"
+  fi
   echo "  telemt: $(_service_status_label telemt)  nginx: $(_service_status_label nginx)  syn-fix: $(_syn_fix_status_label)"
   echo "=============================================="
 }

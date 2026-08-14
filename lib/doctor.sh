@@ -158,6 +158,19 @@ run_doctor_full() {
     fi
   done
 
+  if declare -f access_limits_load_config >/dev/null 2>&1; then
+    access_limits_load_config
+    if [ "${ACCESS_LIMITS_ENABLED:-0}" -eq 1 ]; then
+      if grep -q 'BEGIN telemt-deploy access limits' /etc/telemt/telemt.toml 2>/dev/null; then
+        doctor_record "Access limits" pass "enabled, TOML block present"
+      else
+        doctor_record "Access limits" fail "JSON enabled but TOML block missing"
+      fi
+    else
+      doctor_record "Access limits" pass "disabled"
+    fi
+  fi
+
   case "${SYN_FIX_MODE:-meko}" in
     meko)
       sni_mode=$(meko_install_mode 2>/dev/null || echo none)
